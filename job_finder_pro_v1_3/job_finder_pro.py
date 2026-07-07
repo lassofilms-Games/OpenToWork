@@ -326,12 +326,13 @@ class JobFinderApp(tk.Tk):
         self.new_role.delete(0, "end")
         self.save_config(silent=True)
 
-    def delete_role(self, role):
+    def delete_role(self, role, save=True):
         widget = self.role_widgets.pop(role, None)
         if widget is not None:
             widget.destroy()
         self.role_vars.pop(role, None)
-        self.save_config(silent=True)
+        if save:
+            self.save_config(silent=True)
 
     def delete_unchecked_roles(self):
         to_delete = [r for r, v in self.role_vars.items() if not v.get()]
@@ -378,13 +379,14 @@ class JobFinderApp(tk.Tk):
         self.new_keyword.delete(0, "end")
         self.save_config(silent=True)
 
-    def delete_keyword(self, keyword):
+    def delete_keyword(self, keyword, save=True):
         widget = self.keyword_widgets.pop(keyword, None)
         if widget is not None:
             widget.destroy()
         self.keyword_vars.pop(keyword, None)
         self.keyword_weight_vars.pop(keyword, None)
-        self.save_config(silent=True)
+        if save:
+            self.save_config(silent=True)
 
     def delete_unchecked_keywords(self):
         to_delete = [k for k, v in self.keyword_vars.items() if not v.get()]
@@ -422,12 +424,13 @@ class JobFinderApp(tk.Tk):
         self.custom_location.delete(0, "end")
         self.save_config(silent=True)
 
-    def delete_location(self, location):
+    def delete_location(self, location, save=True):
         widget = self.location_widgets.pop(location, None)
         if widget is not None:
             widget.destroy()
         self.location_vars.pop(location, None)
-        self.save_config(silent=True)
+        if save:
+            self.save_config(silent=True)
 
     def delete_unchecked_locations(self):
         to_delete = [l for l, v in self.location_vars.items() if not v.get()]
@@ -453,12 +456,13 @@ class JobFinderApp(tk.Tk):
         btn.pack(side="right")
         self.source_widgets[source] = row
 
-    def delete_source(self, source):
+    def delete_source(self, source, save=True):
         widget = self.source_widgets.pop(source, None)
         if widget is not None:
             widget.destroy()
         self.source_vars.pop(source, None)
-        self.save_config(silent=True)
+        if save:
+            self.save_config(silent=True)
 
     def delete_unchecked_sources(self):
         to_delete = [s for s, v in self.source_vars.items() if not v.get()]
@@ -502,13 +506,14 @@ class JobFinderApp(tk.Tk):
         self.new_custom_source_domain.delete(0, "end")
         self.save_config(silent=True)
 
-    def delete_custom_source(self, name):
+    def delete_custom_source(self, name, save=True):
         widget = self.custom_source_widgets.pop(name, None)
         if widget is not None:
             widget.destroy()
         self.custom_source_vars.pop(name, None)
         self.custom_source_domains.pop(name, None)
-        self.save_config(silent=True)
+        if save:
+            self.save_config(silent=True)
 
     def delete_unchecked_custom_sources(self):
         to_delete = [n for n, v in self.custom_source_vars.items() if not v.get()]
@@ -729,7 +734,7 @@ class JobFinderApp(tk.Tk):
             roles_list = cfg.get("roles_list")
             if roles_list is not None:
                 for role in list(self.role_vars.keys()):
-                    self.delete_role(role)
+                    self.delete_role(role, save=False)
                 for item in roles_list:
                     name = normalize_text(item.get("name", ""))
                     if name:
@@ -743,7 +748,7 @@ class JobFinderApp(tk.Tk):
             keywords_list = cfg.get("keywords_list")
             if keywords_list is not None:
                 for kw in list(self.keyword_vars.keys()):
-                    self.delete_keyword(kw)
+                    self.delete_keyword(kw, save=False)
                 for item in keywords_list:
                     name = normalize_text(item.get("name", "")).lower()
                     if name:
@@ -751,7 +756,7 @@ class JobFinderApp(tk.Tk):
             locations_list = cfg.get("locations_list")
             if locations_list is not None:
                 for loc in list(self.location_vars.keys()):
-                    self.delete_location(loc)
+                    self.delete_location(loc, save=False)
                 for item in locations_list:
                     name = normalize_text(item.get("name", ""))
                     if name:
@@ -767,7 +772,7 @@ class JobFinderApp(tk.Tk):
             sources_list = cfg.get("sources_list")
             if sources_list is not None:
                 for src in list(self.source_vars.keys()):
-                    self.delete_source(src)
+                    self.delete_source(src, save=False)
                 for item in sources_list:
                     name = normalize_text(item.get("name", ""))
                     if name:
@@ -781,14 +786,15 @@ class JobFinderApp(tk.Tk):
             custom_sources_list = cfg.get("custom_sources_list")
             if custom_sources_list is not None:
                 for name in list(self.custom_source_vars.keys()):
-                    self.delete_custom_source(name)
+                    self.delete_custom_source(name, save=False)
                 for item in custom_sources_list:
                     name = normalize_text(item.get("name", ""))
                     domain = normalize_text(item.get("domain", "")).lower()
                     if name and domain:
                         self.create_custom_source_row(name, domain, enabled=bool(item.get("enabled", True)))
-            if config_path != CONFIG_FILE:
-                self.save_config(silent=True)
+            # Guardado final único: refleja el estado ya completamente migrado,
+            # sin los guardados incidentales a medias de los bucles de arriba.
+            self.save_config(silent=True)
         except Exception as error:
             logger.exception("Unable to load configuration")
             messagebox.showwarning(APP_NAME, f"No se pudo cargar la configuración guardada:\n{error}")
