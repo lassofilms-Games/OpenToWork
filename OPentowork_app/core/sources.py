@@ -136,7 +136,7 @@ def fetch_remoteok(roles, profile_keywords=None, limit=40, lang="es"):
             continue
         loc = normalize_text(item.get("location") or "Remote")
         apply = item.get("url") or f"https://remoteok.com/remote-jobs/{item.get('id','')}"
-        published = item.get("date") or item.get("epoch") or not_available
+        raw_published = item.get("date") or item.get("epoch")
         score, found = score_job(title, desc + " " + tags, company, loc, profile_keywords, roles)
         results.append({
             "match": score,
@@ -145,7 +145,7 @@ def fetch_remoteok(roles, profile_keywords=None, limit=40, lang="es"):
             "location": loc,
             "remote": "Remote",
             "source": "RemoteOK API",
-            "published_date": str(published)[:10] if published else not_available,
+            "published_date": str(raw_published)[:10] if raw_published else not_available,
             "detected_date": datetime.now().strftime("%Y-%m-%d"),
             "apply_url": apply,
             "fallback_url": apply,
@@ -177,7 +177,7 @@ def fetch_remotive(roles, profile_keywords=None, limit=40, lang="es"):
                 continue
             loc = normalize_text(item.get("candidate_required_location") or "Remote")
             apply = item.get("url") or ""
-            published = item.get("publication_date") or not_available
+            raw_published = item.get("publication_date")
             score, found = score_job(title, desc, company, loc, profile_keywords, roles)
             results.append({
                 "match": score,
@@ -186,7 +186,7 @@ def fetch_remotive(roles, profile_keywords=None, limit=40, lang="es"):
                 "location": loc,
                 "remote": "Remote",
                 "source": "Remotive API",
-                "published_date": str(published)[:10] if published else not_available,
+                "published_date": str(raw_published)[:10] if raw_published else not_available,
                 "detected_date": datetime.now().strftime("%Y-%m-%d"),
                 "apply_url": apply,
                 "fallback_url": apply,

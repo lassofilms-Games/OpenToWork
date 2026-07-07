@@ -203,7 +203,7 @@ STRINGS = {
         "credit": "Created by",
 
         # Confirm dialogs
-        "confirm_delete_roles": "Delete {n} unchecked categor(y/ies)?",
+        "confirm_delete_roles": "Delete {n} unchecked role(s)?",
         "confirm_delete_keywords": "Delete {n} unchecked keyword(s)?",
         "confirm_delete_locations": "Delete {n} unchecked location(s)?",
         "confirm_delete_sources": "Delete {n} unchecked source(s)?",
