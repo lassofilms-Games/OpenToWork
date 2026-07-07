@@ -3,7 +3,7 @@ import queue
 import threading
 import webbrowser
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, ttk
 
 import customtkinter as ctk
 from PIL import Image
@@ -30,6 +30,7 @@ class MainWindow(ctk.CTk):
 
         self.jobs = []
         self.displayed_jobs = []
+        self.selected_job = None
         self.role_vars = {}
         self.role_widgets = {}
         self.location_vars = {}
@@ -84,8 +85,9 @@ class MainWindow(ctk.CTk):
             pass
         ctk.CTkLabel(brand, text=APP_NAME, font=theme.FONT_TITLE).pack(side="left")
 
-        self.quick_filter_entry = ctk.CTkEntry(header, placeholder_text="Filtro rápido... (se conecta en el Paso 5)")
+        self.quick_filter_entry = ctk.CTkEntry(header, placeholder_text="Filtro rápido... (Enter para filtrar)")
         self.quick_filter_entry.grid(row=0, column=1, padx=16, pady=8, sticky="ew")
+        self.quick_filter_entry.bind("<Return>", self.apply_quick_filter)
 
         right = ctk.CTkFrame(header, fg_color="transparent")
         right.grid(row=0, column=2, padx=16, pady=8, sticky="e")
@@ -529,7 +531,23 @@ class MainWindow(ctk.CTk):
     def selected_keywords(self):
         return {k: self._keyword_points(k) for k, v in self.keyword_vars.items() if v.get()}
 
-    # ---------- Main area (temporary placeholder until Paso 5) ----------
+    # ---------- Main area: results table ----------
+
+    def _setup_treeview_style(self):
+        style = ttk.Style()
+        try:
+            style.theme_use("clam")
+        except Exception:
+            pass
+        style.configure(
+            "OTW.Treeview", background=theme.WHITE, fieldbackground=theme.WHITE,
+            foreground="#1A1A1A", rowheight=26, borderwidth=0, font=theme.FONT_BODY,
+        )
+        style.configure(
+            "OTW.Treeview.Heading", background=theme.GRAY_LIGHT, foreground="#1A1A1A",
+            font=theme.FONT_SECTION, relief="flat",
+        )
+        style.map("OTW.Treeview", background=[("selected", "#D7EFDC")], foreground=[("selected", "#0A3D14")])
 
     def _build_main_area(self):
         main_area = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
@@ -539,11 +557,38 @@ class MainWindow(ctk.CTk):
 
         self.table_frame = ctk.CTkFrame(main_area, corner_radius=10)
         self.table_frame.grid(row=0, column=0, sticky="nsew")
-        self.table_placeholder_label = ctk.CTkLabel(
+        self.table_frame.grid_rowconfigure(0, weight=1)
+        self.table_frame.grid_columnconfigure(0, weight=1)
+
+        self._setup_treeview_style()
+        columns = ("match", "title", "company", "location", "source", "published", "type")
+        headings = {
+            "match": "Match", "title": "Título", "company": "Empresa", "location": "Ubicación",
+            "source": "Fuente", "published": "Publicado", "type": "Tipo",
+        }
+        widths = {"match": 70, "title": 260, "company": 150, "location": 140, "source": 130, "published": 100, "type": 150}
+        self.tree = ttk.Treeview(self.table_frame, columns=columns, show="headings", style="OTW.Treeview")
+        for c in columns:
+            self.tree.heading(c, text=headings[c])
+            self.tree.column(c, width=widths[c], anchor="w")
+        self.tree.tag_configure("api", background="#E9F7EC")
+        self.tree.tag_configure("search", background="#F4F4F6")
+        self.tree.tag_configure("match_high", foreground="#0F7B2E")
+        self.tree.tag_configure("match_mid", foreground="#9A6B00")
+        self.tree.tag_configure("match_low", foreground="#6B6B70")
+        self.tree.grid(row=0, column=0, sticky="nsew", padx=(1, 0), pady=1)
+        self.tree.bind("<<TreeviewSelect>>", self._on_tree_select)
+        self.tree.bind("<Double-1>", lambda e: self.open_selected())
+
+        tree_scroll = ttk.Scrollbar(self.table_frame, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=tree_scroll.set)
+        tree_scroll.grid(row=0, column=1, sticky="ns", pady=1)
+
+        self.empty_state_label = ctk.CTkLabel(
             self.table_frame, text="Todavía no hay resultados.\nElige tus filtros y pulsa Buscar ofertas.",
-            font=theme.FONT_BODY, text_color=theme.TEXT_MUTED, justify="center",
+            font=theme.FONT_BODY, text_color=theme.TEXT_MUTED, justify="center", fg_color=theme.WHITE,
         )
-        self.table_placeholder_label.place(relx=0.5, rely=0.5, anchor="center")
+        self.empty_state_label.place(relx=0.5, rely=0.5, anchor="center")
 
         self.detail_frame = ctk.CTkFrame(main_area, corner_radius=10, height=90)
         self.detail_frame.grid(row=1, column=0, sticky="ew", pady=(12, 0))
@@ -555,18 +600,57 @@ class MainWindow(ctk.CTk):
 
     def populate_tree(self, jobs):
         self.displayed_jobs = list(jobs)
-        api_count = sum(1 for j in jobs if j.get("type") == "api_result")
-        link_count = len(jobs) - api_count
-        if jobs:
-            text = (
-                f"{len(jobs)} resultados encontrados\n"
-                f"({api_count} ofertas reales, {link_count} enlaces de búsqueda)\n\n"
-                f"La tabla y el panel de detalle se conectan en los Pasos 5 y 6."
-            )
-        else:
-            text = "Todavía no hay resultados.\nElige tus filtros y pulsa Buscar ofertas."
-        self.table_placeholder_label.configure(text=text)
+        self.tree.delete(*self.tree.get_children())
+        for idx, j in enumerate(jobs):
+            job_type = "Oferta real" if j.get("type") == "api_result" else "Enlace de búsqueda"
+            bg_tag = "api" if j.get("type") == "api_result" else "search"
+            match = j.get("match", 0) or 0
+            match_tag = "match_high" if match >= 70 else "match_mid" if match >= 40 else "match_low"
+            self.tree.insert("", "end", iid=str(idx), values=(
+                f"{match}%", j.get("title", ""), j.get("company", ""), j.get("location", ""),
+                j.get("source", ""), j.get("published_date", ""), job_type,
+            ), tags=(bg_tag, match_tag))
         self.result_count_label.configure(text=f"{len(jobs)} resultados")
+        if jobs:
+            self.empty_state_label.place_forget()
+        else:
+            self.empty_state_label.configure(text="Todavía no hay resultados.\nElige tus filtros y pulsa Buscar ofertas.")
+            self.empty_state_label.place(relx=0.5, rely=0.5, anchor="center")
+
+    def get_selected_job(self):
+        sel = self.tree.selection()
+        if not sel:
+            return None
+        try:
+            idx = int(sel[0])
+            if 0 <= idx < len(self.displayed_jobs):
+                return self.displayed_jobs[idx]
+            return None
+        except Exception:
+            return None
+
+    def _on_tree_select(self, event=None):
+        self.selected_job = self.get_selected_job()
+
+    def open_selected(self):
+        j = self.get_selected_job()
+        if not j:
+            messagebox.showwarning(APP_NAME, "Selecciona un resultado antes de abrir el enlace.")
+            return
+        if j.get("apply_url"):
+            webbrowser.open(j["apply_url"])
+            return
+        messagebox.showwarning(APP_NAME, "El resultado seleccionado no tiene enlace para abrir.")
+
+    def apply_quick_filter(self, event=None):
+        q = self.quick_filter_entry.get().lower().strip()
+        if not q:
+            self.populate_tree(self.jobs)
+            self.status_label.configure(text="Filtro limpio")
+            return
+        filtered = [j for j in self.jobs if q in " ".join(str(v) for v in j.values()).lower()]
+        self.populate_tree(filtered)
+        self.status_label.configure(text=f"{len(filtered)} filtrados")
 
     # ---------- Status bar ----------
 
@@ -696,7 +780,9 @@ class MainWindow(ctk.CTk):
         self.save_config(silent=True)
         self.jobs = []
         self.displayed_jobs = []
-        self.table_placeholder_label.configure(text="Buscando...")
+        self.tree.delete(*self.tree.get_children())
+        self.empty_state_label.configure(text="Buscando...")
+        self.empty_state_label.place(relx=0.5, rely=0.5, anchor="center")
         self.result_count_label.configure(text="0 resultados")
         self.search_queue = queue.Queue()
         self._set_search_state(True, "Buscando...")
