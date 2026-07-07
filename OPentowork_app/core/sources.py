@@ -4,6 +4,7 @@ from datetime import datetime
 
 from constants import APP_NAME, APP_VERSION
 from core.scoring import normalize_text, score_job
+from i18n import t
 
 try:
     import requests
@@ -82,7 +83,7 @@ def build_source_url(source, role, location, source_domains=None):
     return build_google_url(role, location, domains.get(source, ""))
 
 
-def make_search_links(roles, locations, sources, profile_keywords=None, source_domains=None):
+def make_search_links(roles, locations, sources, profile_keywords=None, source_domains=None, lang="es"):
     domains = SOURCE_DOMAINS if source_domains is None else source_domains
     jobs = []
     for role in roles:
@@ -93,9 +94,9 @@ def make_search_links(roles, locations, sources, profile_keywords=None, source_d
                 domain = domains.get(src, "")
                 direct = build_source_url(src, role, loc, domains)
                 google = build_google_url(role, loc, domain) if domain else direct
-                title = f"Buscar: {role}"
-                desc = f"Búsqueda directa en {src} para {role} en {loc}. Si el link directo falla, usa el fallback de Google."
-                score, found = score_job(title, desc, src, loc, profile_keywords, roles)
+                title = t(lang, "search_link_title", role=role)
+                desc = t(lang, "search_link_description", src=src, role=role, loc=loc)
+                score, found = score_job(title, desc, src, loc, profile_keywords, roles, is_search_link=True)
                 jobs.append({
                     "match": score,
                     "title": title,
@@ -103,7 +104,7 @@ def make_search_links(roles, locations, sources, profile_keywords=None, source_d
                     "location": loc,
                     "remote": "Remote" if "remote" in loc.lower() else "Hybrid/On-site possible",
                     "source": src,
-                    "published_date": "No disponible",
+                    "published_date": t(lang, "not_available"),
                     "detected_date": datetime.now().strftime("%Y-%m-%d"),
                     "apply_url": direct,
                     "fallback_url": google,
@@ -114,7 +115,7 @@ def make_search_links(roles, locations, sources, profile_keywords=None, source_d
     return jobs
 
 
-def fetch_remoteok(roles, profile_keywords=None, limit=40):
+def fetch_remoteok(roles, profile_keywords=None, limit=40, lang="es"):
     results = []
     url = "https://remoteok.com/api"
     headers = {"User-Agent": f"{APP_NAME}/{APP_VERSION}"}
@@ -124,6 +125,7 @@ def fetch_remoteok(roles, profile_keywords=None, limit=40):
     except ValueError as error:
         raise SourceFetchError("RemoteOK API", "invalid_response", "RemoteOK API: la respuesta JSON no es valida.") from error
     role_terms = [x.lower() for x in roles]
+    not_available = t(lang, "not_available")
     for item in data[1:]:
         title = normalize_text(item.get("position") or item.get("title"))
         company = normalize_text(item.get("company"))
@@ -134,7 +136,7 @@ def fetch_remoteok(roles, profile_keywords=None, limit=40):
             continue
         loc = normalize_text(item.get("location") or "Remote")
         apply = item.get("url") or f"https://remoteok.com/remote-jobs/{item.get('id','')}"
-        published = item.get("date") or item.get("epoch") or "No disponible"
+        published = item.get("date") or item.get("epoch") or not_available
         score, found = score_job(title, desc + " " + tags, company, loc, profile_keywords, roles)
         results.append({
             "match": score,
@@ -143,7 +145,7 @@ def fetch_remoteok(roles, profile_keywords=None, limit=40):
             "location": loc,
             "remote": "Remote",
             "source": "RemoteOK API",
-            "published_date": str(published)[:10] if published else "No disponible",
+            "published_date": str(published)[:10] if published else not_available,
             "detected_date": datetime.now().strftime("%Y-%m-%d"),
             "apply_url": apply,
             "fallback_url": apply,
@@ -154,9 +156,10 @@ def fetch_remoteok(roles, profile_keywords=None, limit=40):
     return results[:limit]
 
 
-def fetch_remotive(roles, profile_keywords=None, limit=40):
+def fetch_remotive(roles, profile_keywords=None, limit=40, lang="es"):
     results = []
     role_terms = [x.lower() for x in roles]
+    not_available = t(lang, "not_available")
     for role in roles[:8]:
         q = urllib.parse.quote_plus(role)
         url = f"https://remotive.com/api/remote-jobs?search={q}"
@@ -174,7 +177,7 @@ def fetch_remotive(roles, profile_keywords=None, limit=40):
                 continue
             loc = normalize_text(item.get("candidate_required_location") or "Remote")
             apply = item.get("url") or ""
-            published = item.get("publication_date") or "No disponible"
+            published = item.get("publication_date") or not_available
             score, found = score_job(title, desc, company, loc, profile_keywords, roles)
             results.append({
                 "match": score,
@@ -183,7 +186,7 @@ def fetch_remotive(roles, profile_keywords=None, limit=40):
                 "location": loc,
                 "remote": "Remote",
                 "source": "Remotive API",
-                "published_date": str(published)[:10] if published else "No disponible",
+                "published_date": str(published)[:10] if published else not_available,
                 "detected_date": datetime.now().strftime("%Y-%m-%d"),
                 "apply_url": apply,
                 "fallback_url": apply,

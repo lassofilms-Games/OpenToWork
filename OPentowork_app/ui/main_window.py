@@ -14,6 +14,7 @@ from core.sources import SourceFetchError, SOURCE_DOMAINS, make_search_links, fe
 from core.export import now_stamp, export_txt, export_csv, export_html
 from core.config_store import RESULTS_DIR, CONFIG_FILE, LEGACY_CONFIG_FILE, find_legacy_appdata_config
 from core.logging_setup import setup_logging
+from i18n import t
 from ui import theme
 
 logger = setup_logging()
@@ -28,6 +29,7 @@ class MainWindow(ctk.CTk):
         self.minsize(1180, 680)
         self._set_icon()
 
+        self.language = "es"
         self.jobs = []
         self.displayed_jobs = []
         self.selected_job = None
@@ -48,6 +50,8 @@ class MainWindow(ctk.CTk):
         self.search_button = None
         self.export_button = None
         self.save_button = None
+        self.delete_unchecked_buttons = []
+        self.future_row_labels = []
 
         self._build_layout()
         self.load_config()
@@ -57,6 +61,9 @@ class MainWindow(ctk.CTk):
             self.iconbitmap(str(theme.ICON_PATH))
         except Exception:
             pass
+
+    def t(self, key, **kwargs):
+        return t(self.language, key, **kwargs)
 
     def _build_layout(self):
         self.grid_columnconfigure(0, weight=0)
@@ -85,14 +92,19 @@ class MainWindow(ctk.CTk):
             pass
         ctk.CTkLabel(brand, text=APP_NAME, font=theme.FONT_TITLE).pack(side="left")
 
-        self.quick_filter_entry = ctk.CTkEntry(header, placeholder_text="Filtro rápido... (Enter para filtrar)")
+        self.quick_filter_entry = ctk.CTkEntry(header, placeholder_text=self.t("quick_filter_placeholder"))
         self.quick_filter_entry.grid(row=0, column=1, padx=16, pady=8, sticky="ew")
         self.quick_filter_entry.bind("<Return>", self.apply_quick_filter)
 
         right = ctk.CTkFrame(header, fg_color="transparent")
         right.grid(row=0, column=2, padx=16, pady=8, sticky="e")
-        self.result_count_label = ctk.CTkLabel(right, text="0 resultados", font=theme.FONT_BODY, text_color=theme.TEXT_MUTED)
+        self.result_count_label = ctk.CTkLabel(right, text=self.t("result_count", n=0), font=theme.FONT_BODY, text_color=theme.TEXT_MUTED)
         self.result_count_label.pack(side="left", padx=(0, 12))
+        self.language_button = ctk.CTkButton(
+            right, text="EN", width=32, height=28, fg_color="transparent",
+            text_color=theme.TEXT_MUTED, hover_color=theme.GRAY_LIGHT, command=self._toggle_language,
+        )
+        self.language_button.pack(side="left", padx=(0, 4))
         self.theme_button = ctk.CTkButton(
             right, text="🌙", width=32, height=28, fg_color="transparent",
             text_color=theme.TEXT_MUTED, hover_color=theme.GRAY_LIGHT, command=self._toggle_theme,
@@ -109,6 +121,60 @@ class MainWindow(ctk.CTk):
         self._setup_treeview_style()
         self._render_detail(self.selected_job)
 
+    def _toggle_language(self):
+        self.language = "en" if self.language == "es" else "es"
+        self.save_config(silent=True)
+        self._apply_language()
+
+    def _apply_language(self):
+        self.language_button.configure(text="ES" if self.language == "en" else "EN")
+        self.quick_filter_entry.configure(placeholder_text=self.t("quick_filter_placeholder"))
+        self.result_count_label.configure(text=self.t("result_count", n=len(self.displayed_jobs)))
+        self.search_button.configure(text=self.t("search_button"))
+        self.export_button.configure(text=self.t("export_button"))
+        self.save_button.configure(text=self.t("save_button"))
+        self.roles_section_label.configure(text=self.t("section_roles"))
+        self.location_section_label.configure(text=self.t("section_location"))
+        self.sources_section_label.configure(text=self.t("section_sources"))
+        self.custom_sources_section_label.configure(text=self.t("section_custom_sources"))
+        self.custom_sources_hint_label.configure(text=self.t("section_custom_sources_hint"))
+        self.keywords_section_label.configure(text=self.t("section_keywords"))
+        for btn in self.delete_unchecked_buttons:
+            btn.configure(text=self.t("delete_unchecked"))
+        self.new_role_entry.configure(placeholder_text=self.t("new_role_placeholder"))
+        self.custom_location_entry.configure(placeholder_text=self.t("new_location_placeholder"))
+        self.new_custom_source_name_entry.configure(placeholder_text=self.t("new_source_name_placeholder"))
+        self.new_custom_source_domain_entry.configure(placeholder_text=self.t("new_source_domain_placeholder"))
+        self.add_custom_source_button.configure(text=self.t("add_source_button"))
+        self.new_keyword_entry.configure(placeholder_text=self.t("new_keyword_placeholder"))
+        self.add_keyword_button.configure(text=self.t("add_keyword_button"))
+
+        headings = {
+            "match": self.t("col_match"), "title": self.t("col_title"), "company": self.t("col_company"),
+            "location": self.t("col_location"), "source": self.t("col_source"),
+            "published": self.t("col_published"), "type": self.t("col_type"),
+        }
+        for col, text in headings.items():
+            self.tree.heading(col, text=text)
+
+        self.detail_open_button.configure(text=self.t("open_link_button"))
+        self.detail_fallback_button.configure(text=self.t("open_fallback_button"))
+        self.detail_export_button.configure(text=self.t("export_all_button"))
+        for label, key in self.future_row_labels:
+            label.configure(text=f"{self.t(key)} {self.t('future_suffix')}")
+
+        self.status_label.configure(text=self.t("status_ready"))
+        self.credit_label.configure(text=f"{APP_NAME} v{APP_VERSION} · {self.t('credit')} {APP_AUTHOR}")
+
+        if self.jobs:
+            self._refresh_tree_type_labels()
+        else:
+            self.empty_state_label.configure(text=self.t("empty_results"))
+        if self.selected_job:
+            self._render_detail(self.selected_job)
+        else:
+            self.detail_empty_label.configure(text=self.t("empty_detail"))
+
     # ---------- Sidebar ----------
 
     def _build_sidebar(self):
@@ -117,7 +183,7 @@ class MainWindow(ctk.CTk):
         sidebar.grid_propagate(False)
 
         self.search_button = ctk.CTkButton(
-            sidebar, text="🔍  Buscar ofertas", height=42, font=theme.FONT_SECTION,
+            sidebar, text=self.t("search_button"), height=42, font=theme.FONT_SECTION,
             fg_color=theme.GREEN, hover_color=theme.GREEN_HOVER, command=self.search_jobs,
         )
         self.search_button.pack(fill="x", padx=16, pady=(16, 12))
@@ -135,30 +201,35 @@ class MainWindow(ctk.CTk):
         actions = ctk.CTkFrame(sidebar, fg_color="transparent")
         actions.pack(fill="x", padx=16, pady=(4, 16))
         self.export_button = ctk.CTkButton(
-            actions, text="Exportar TXT/CSV/HTML", fg_color="transparent", border_width=1,
+            actions, text=self.t("export_button"), fg_color="transparent", border_width=1,
             border_color=theme.GRAY, text_color=theme.TEXT_MUTED, hover_color=theme.GRAY_LIGHT,
             command=self.export_all, anchor="w",
         )
         self.export_button.pack(fill="x", pady=(0, 6))
         self.save_button = ctk.CTkButton(
-            actions, text="Guardar configuración", fg_color="transparent", border_width=1,
+            actions, text=self.t("save_button"), fg_color="transparent", border_width=1,
             border_color=theme.GRAY, text_color=theme.TEXT_MUTED, hover_color=theme.GRAY_LIGHT,
             command=self.save_config, anchor="w",
         )
         self.save_button.pack(fill="x")
 
     def _section_label(self, parent, text):
-        ctk.CTkLabel(parent, text=text, font=theme.FONT_SECTION, anchor="w").pack(fill="x", pady=(12, 4))
+        label = ctk.CTkLabel(parent, text=text, font=theme.FONT_SECTION, anchor="w")
+        label.pack(fill="x", pady=(12, 4))
+        return label
 
     def _small_action_button(self, parent, text, command):
-        ctk.CTkButton(
+        button = ctk.CTkButton(
             parent, text=text, height=26, font=theme.FONT_SMALL, fg_color="transparent",
             text_color=theme.TEXT_MUTED, hover_color=theme.GRAY_LIGHT, command=command,
             anchor="w",
-        ).pack(fill="x", pady=(4, 0))
+        )
+        button.pack(fill="x", pady=(4, 0))
+        self.delete_unchecked_buttons.append(button)
+        return button
 
     def _build_roles_section(self, parent):
-        self._section_label(parent, "Roles")
+        self.roles_section_label = self._section_label(parent, self.t("section_roles"))
         self.roles_frame = ctk.CTkFrame(parent, fg_color="transparent")
         self.roles_frame.pack(fill="x")
         for r in DEFAULT_ROLES:
@@ -166,17 +237,17 @@ class MainWindow(ctk.CTk):
 
         add_row = ctk.CTkFrame(parent, fg_color="transparent")
         add_row.pack(fill="x", pady=(4, 0))
-        self.new_role_entry = ctk.CTkEntry(add_row, placeholder_text="Nueva categoría...")
+        self.new_role_entry = ctk.CTkEntry(add_row, placeholder_text=self.t("new_role_placeholder"))
         self.new_role_entry.pack(side="left", fill="x", expand=True)
         self.new_role_entry.bind("<Return>", lambda e: self.add_role())
         ctk.CTkButton(
             add_row, text="+", width=32, command=self.add_role,
             fg_color=theme.GREEN, hover_color=theme.GREEN_HOVER,
         ).pack(side="left", padx=(4, 0))
-        self._small_action_button(parent, "Eliminar desmarcadas", self.delete_unchecked_roles)
+        self._small_action_button(parent, self.t("delete_unchecked"), self.delete_unchecked_roles)
 
     def _build_location_section(self, parent):
-        self._section_label(parent, "Ubicación")
+        self.location_section_label = self._section_label(parent, self.t("section_location"))
         self.locations_frame = ctk.CTkFrame(parent, fg_color="transparent")
         self.locations_frame.pack(fill="x")
         for loc in DEFAULT_LOCATIONS:
@@ -184,46 +255,48 @@ class MainWindow(ctk.CTk):
 
         add_row = ctk.CTkFrame(parent, fg_color="transparent")
         add_row.pack(fill="x", pady=(4, 0))
-        self.custom_location_entry = ctk.CTkEntry(add_row, placeholder_text="Añadir ubicación...")
+        self.custom_location_entry = ctk.CTkEntry(add_row, placeholder_text=self.t("new_location_placeholder"))
         self.custom_location_entry.pack(side="left", fill="x", expand=True)
         self.custom_location_entry.bind("<Return>", lambda e: self.add_location())
         ctk.CTkButton(
             add_row, text="+", width=32, command=self.add_location,
             fg_color=theme.GREEN, hover_color=theme.GREEN_HOVER,
         ).pack(side="left", padx=(4, 0))
-        self._small_action_button(parent, "Eliminar desmarcadas", self.delete_unchecked_locations)
+        self._small_action_button(parent, self.t("delete_unchecked"), self.delete_unchecked_locations)
 
     def _build_sources_section(self, parent):
-        self._section_label(parent, "Fuentes")
+        self.sources_section_label = self._section_label(parent, self.t("section_sources"))
         self.sources_frame = ctk.CTkFrame(parent, fg_color="transparent")
         self.sources_frame.pack(fill="x")
         for src, enabled in DEFAULT_SOURCES.items():
             self.create_source_row(src, enabled=enabled)
-        self._small_action_button(parent, "Eliminar desmarcadas", self.delete_unchecked_sources)
+        self._small_action_button(parent, self.t("delete_unchecked"), self.delete_unchecked_sources)
 
     def _build_custom_sources_section(self, parent):
-        self._section_label(parent, "Fuentes personalizadas")
-        ctk.CTkLabel(
-            parent, text="Añade otros portales de empleo por dominio",
+        self.custom_sources_section_label = self._section_label(parent, self.t("section_custom_sources"))
+        self.custom_sources_hint_label = ctk.CTkLabel(
+            parent, text=self.t("section_custom_sources_hint"),
             font=theme.FONT_SMALL, text_color=theme.TEXT_MUTED, anchor="w",
             wraplength=theme.SIDEBAR_WIDTH - 32, justify="left",
-        ).pack(fill="x")
+        )
+        self.custom_sources_hint_label.pack(fill="x")
         self.custom_sources_frame = ctk.CTkFrame(parent, fg_color="transparent")
         self.custom_sources_frame.pack(fill="x", pady=(4, 0))
 
-        self.new_custom_source_name_entry = ctk.CTkEntry(parent, placeholder_text="Nombre de la fuente")
+        self.new_custom_source_name_entry = ctk.CTkEntry(parent, placeholder_text=self.t("new_source_name_placeholder"))
         self.new_custom_source_name_entry.pack(fill="x", pady=(4, 2))
-        self.new_custom_source_domain_entry = ctk.CTkEntry(parent, placeholder_text="Dominio (ej: indeed.com)")
+        self.new_custom_source_domain_entry = ctk.CTkEntry(parent, placeholder_text=self.t("new_source_domain_placeholder"))
         self.new_custom_source_domain_entry.pack(fill="x")
         self.new_custom_source_domain_entry.bind("<Return>", lambda e: self.add_custom_source())
-        ctk.CTkButton(
-            parent, text="+ Añadir fuente", command=self.add_custom_source,
+        self.add_custom_source_button = ctk.CTkButton(
+            parent, text=self.t("add_source_button"), command=self.add_custom_source,
             fg_color=theme.GREEN, hover_color=theme.GREEN_HOVER,
-        ).pack(fill="x", pady=(4, 0))
-        self._small_action_button(parent, "Eliminar desmarcadas", self.delete_unchecked_custom_sources)
+        )
+        self.add_custom_source_button.pack(fill="x", pady=(4, 0))
+        self._small_action_button(parent, self.t("delete_unchecked"), self.delete_unchecked_custom_sources)
 
     def _build_keywords_section(self, parent):
-        self._section_label(parent, "Keywords / Match")
+        self.keywords_section_label = self._section_label(parent, self.t("section_keywords"))
         self.keywords_frame = ctk.CTkFrame(parent, fg_color="transparent")
         self.keywords_frame.pack(fill="x")
         for k, pts in DEFAULT_PROFILE_KEYWORDS.items():
@@ -231,17 +304,18 @@ class MainWindow(ctk.CTk):
 
         add_row = ctk.CTkFrame(parent, fg_color="transparent")
         add_row.pack(fill="x", pady=(4, 0))
-        self.new_keyword_entry = ctk.CTkEntry(add_row, placeholder_text="Nueva keyword...")
+        self.new_keyword_entry = ctk.CTkEntry(add_row, placeholder_text=self.t("new_keyword_placeholder"))
         self.new_keyword_entry.pack(side="left", fill="x", expand=True)
         self.new_keyword_entry.bind("<Return>", lambda e: self.add_keyword())
         self.new_keyword_points_entry = ctk.CTkEntry(add_row, width=40)
         self.new_keyword_points_entry.insert(0, "10")
         self.new_keyword_points_entry.pack(side="left", padx=(4, 0))
-        ctk.CTkButton(
-            parent, text="+ Añadir keyword", command=self.add_keyword,
+        self.add_keyword_button = ctk.CTkButton(
+            parent, text=self.t("add_keyword_button"), command=self.add_keyword,
             fg_color=theme.GREEN, hover_color=theme.GREEN_HOVER,
-        ).pack(fill="x", pady=(4, 0))
-        self._small_action_button(parent, "Eliminar desmarcadas", self.delete_unchecked_keywords)
+        )
+        self.add_keyword_button.pack(fill="x", pady=(4, 0))
+        self._small_action_button(parent, self.t("delete_unchecked"), self.delete_unchecked_keywords)
 
     # ---------- Roles ----------
 
@@ -288,9 +362,9 @@ class MainWindow(ctk.CTk):
     def delete_unchecked_roles(self):
         to_delete = [r for r, v in self.role_vars.items() if not v.get()]
         if not to_delete:
-            messagebox.showinfo(APP_NAME, "No hay categorías desmarcadas para eliminar.")
+            messagebox.showinfo(APP_NAME, self.t("no_unchecked_roles"))
             return
-        if messagebox.askyesno(APP_NAME, f"¿Eliminar {len(to_delete)} categoría(s) desmarcada(s)?"):
+        if messagebox.askyesno(APP_NAME, self.t("confirm_delete_roles", n=len(to_delete))):
             for role in to_delete:
                 self.delete_role(role)
 
@@ -355,9 +429,9 @@ class MainWindow(ctk.CTk):
     def delete_unchecked_keywords(self):
         to_delete = [k for k, v in self.keyword_vars.items() if not v.get()]
         if not to_delete:
-            messagebox.showinfo(APP_NAME, "No hay keywords desmarcadas para eliminar.")
+            messagebox.showinfo(APP_NAME, self.t("no_unchecked_keywords"))
             return
-        if messagebox.askyesno(APP_NAME, f"¿Eliminar {len(to_delete)} keyword(s) desmarcada(s)?"):
+        if messagebox.askyesno(APP_NAME, self.t("confirm_delete_keywords", n=len(to_delete))):
             for keyword in to_delete:
                 self.delete_keyword(keyword)
 
@@ -406,9 +480,9 @@ class MainWindow(ctk.CTk):
     def delete_unchecked_locations(self):
         to_delete = [l for l, v in self.location_vars.items() if not v.get()]
         if not to_delete:
-            messagebox.showinfo(APP_NAME, "No hay ubicaciones desmarcadas para eliminar.")
+            messagebox.showinfo(APP_NAME, self.t("no_unchecked_locations"))
             return
-        if messagebox.askyesno(APP_NAME, f"¿Eliminar {len(to_delete)} ubicación(es) desmarcada(s)?"):
+        if messagebox.askyesno(APP_NAME, self.t("confirm_delete_locations", n=len(to_delete))):
             for location in to_delete:
                 self.delete_location(location)
 
@@ -445,9 +519,9 @@ class MainWindow(ctk.CTk):
     def delete_unchecked_sources(self):
         to_delete = [s for s, v in self.source_vars.items() if not v.get()]
         if not to_delete:
-            messagebox.showinfo(APP_NAME, "No hay fuentes desmarcadas para eliminar.")
+            messagebox.showinfo(APP_NAME, self.t("no_unchecked_sources"))
             return
-        if messagebox.askyesno(APP_NAME, f"¿Eliminar {len(to_delete)} fuente(s) desmarcada(s)?"):
+        if messagebox.askyesno(APP_NAME, self.t("confirm_delete_sources", n=len(to_delete))):
             for source in to_delete:
                 self.delete_source(source)
 
@@ -480,7 +554,7 @@ class MainWindow(ctk.CTk):
         domain = normalize_text(self.new_custom_source_domain_entry.get()).lower()
         domain = domain.replace("https://", "").replace("http://", "").strip("/")
         if not name or not domain:
-            messagebox.showwarning(APP_NAME, "Indica un nombre y un dominio para la fuente personalizada.")
+            messagebox.showwarning(APP_NAME, self.t("need_name_domain"))
             return
         if name in self.custom_source_vars:
             self.custom_source_vars[name].set(True)
@@ -503,9 +577,9 @@ class MainWindow(ctk.CTk):
     def delete_unchecked_custom_sources(self):
         to_delete = [n for n, v in self.custom_source_vars.items() if not v.get()]
         if not to_delete:
-            messagebox.showinfo(APP_NAME, "No hay fuentes personalizadas desmarcadas para eliminar.")
+            messagebox.showinfo(APP_NAME, self.t("no_unchecked_custom_sources"))
             return
-        if messagebox.askyesno(APP_NAME, f"¿Eliminar {len(to_delete)} fuente(s) personalizada(s) desmarcada(s)?"):
+        if messagebox.askyesno(APP_NAME, self.t("confirm_delete_custom_sources", n=len(to_delete))):
             for name in to_delete:
                 self.delete_custom_source(name)
 
@@ -582,8 +656,9 @@ class MainWindow(ctk.CTk):
 
         columns = ("match", "title", "company", "location", "source", "published", "type")
         headings = {
-            "match": "Match", "title": "Título", "company": "Empresa", "location": "Ubicación",
-            "source": "Fuente", "published": "Publicado", "type": "Tipo",
+            "match": self.t("col_match"), "title": self.t("col_title"), "company": self.t("col_company"),
+            "location": self.t("col_location"), "source": self.t("col_source"),
+            "published": self.t("col_published"), "type": self.t("col_type"),
         }
         widths = {"match": 70, "title": 260, "company": 150, "location": 140, "source": 130, "published": 100, "type": 150}
         self.tree = ttk.Treeview(self.table_frame, columns=columns, show="headings", style="OTW.Treeview")
@@ -600,7 +675,7 @@ class MainWindow(ctk.CTk):
         tree_scroll.grid(row=0, column=1, sticky="ns", pady=1)
 
         self.empty_state_label = ctk.CTkLabel(
-            self.table_frame, text="Todavía no hay resultados.\nElige tus filtros y pulsa Buscar ofertas.",
+            self.table_frame, text=self.t("empty_results"),
             font=theme.FONT_BODY, text_color=theme.TEXT_MUTED, justify="center", fg_color=theme.TABLE_BG,
         )
         self.empty_state_label.place(relx=0.5, rely=0.5, anchor="center")
@@ -615,7 +690,7 @@ class MainWindow(ctk.CTk):
         self.detail_frame.grid_columnconfigure(0, weight=1)
 
         self.detail_empty_label = ctk.CTkLabel(
-            self.detail_frame, text="Selecciona un resultado para ver el detalle.",
+            self.detail_frame, text=self.t("empty_detail"),
             font=theme.FONT_BODY, text_color=theme.TEXT_MUTED,
         )
         self.detail_empty_label.place(relx=0.5, rely=0.5, anchor="center")
@@ -659,18 +734,18 @@ class MainWindow(ctk.CTk):
         buttons_col = ctk.CTkFrame(self.detail_content, fg_color="transparent")
         buttons_col.grid(row=0, column=1, rowspan=4, sticky="n", padx=16, pady=12)
         self.detail_open_button = ctk.CTkButton(
-            buttons_col, text="🔗 Abrir enlace", fg_color=theme.GREEN, hover_color=theme.GREEN_HOVER,
+            buttons_col, text=self.t("open_link_button"), fg_color=theme.GREEN, hover_color=theme.GREEN_HOVER,
             command=self.open_selected,
         )
         self.detail_open_button.pack(fill="x", pady=(0, 6))
         self.detail_fallback_button = ctk.CTkButton(
-            buttons_col, text="Abrir fallback Google", fg_color="transparent", border_width=1,
+            buttons_col, text=self.t("open_fallback_button"), fg_color="transparent", border_width=1,
             border_color=theme.GRAY, text_color=theme.TEXT_MUTED, hover_color=theme.GRAY_LIGHT,
             command=self.open_fallback,
         )
         self.detail_fallback_button.pack(fill="x", pady=(0, 6))
         self.detail_export_button = ctk.CTkButton(
-            buttons_col, text="📤 Exportar todo", fg_color="transparent", border_width=1,
+            buttons_col, text=self.t("export_all_button"), fg_color="transparent", border_width=1,
             border_color=theme.GRAY, text_color=theme.TEXT_MUTED, hover_color=theme.GRAY_LIGHT,
             command=self.export_all,
         )
@@ -678,11 +753,13 @@ class MainWindow(ctk.CTk):
 
         future_row = ctk.CTkFrame(self.detail_content, fg_color="transparent")
         future_row.grid(row=4, column=0, columnspan=2, sticky="ew", padx=16, pady=(0, 10))
-        for future_text in ("⭐ Favorito", "✔ Aplicado", "✕ Descartado", "📝 Notas"):
-            ctk.CTkLabel(
-                future_row, text=f"{future_text} (próximamente)", font=theme.FONT_SMALL,
+        for future_key in ("future_favorite", "future_applied", "future_discarded", "future_notes"):
+            future_label = ctk.CTkLabel(
+                future_row, text=f"{self.t(future_key)} {self.t('future_suffix')}", font=theme.FONT_SMALL,
                 text_color=theme.TEXT_MUTED,
-            ).pack(side="left", padx=(0, 16))
+            )
+            future_label.pack(side="left", padx=(0, 16))
+            self.future_row_labels.append((future_label, future_key))
 
     def _render_detail(self, job):
         if not job:
@@ -694,7 +771,7 @@ class MainWindow(ctk.CTk):
 
         is_api = job.get("type") == "api_result"
         self.detail_type_badge.configure(
-            text="Oferta real" if is_api else "Enlace de búsqueda",
+            text=self.t("type_api") if is_api else self.t("type_search"),
             fg_color=theme.GREEN if is_api else theme.GRAY,
             text_color=theme.WHITE if is_api else "#333333",
         )
@@ -704,14 +781,14 @@ class MainWindow(ctk.CTk):
         self.detail_match_badge.configure(text=f"{match}%", text_color=match_color, fg_color=theme.DESCRIPTION_BG)
         self.detail_title_label.configure(text=job.get("title") or "-")
         self.detail_subtitle_label.configure(
-            text=(
-                f"{job.get('company', '-')}  ·  {job.get('location', '-')}  ·  {job.get('source', '-')}\n"
-                f"Publicado: {job.get('published_date', 'No disponible')}   ·   "
-                f"Detectado: {job.get('detected_date', '-')}"
+            text=self.t(
+                "detail_subtitle",
+                company=job.get("company", "-"), location=job.get("location", "-"), source=job.get("source", "-"),
+                published=job.get("published_date") or self.t("not_available"), detected=job.get("detected_date", "-"),
             )
         )
         skills = job.get("skills_found", "")
-        self.detail_skills_label.configure(text=f"Skills: {skills}" if skills else "Skills: -")
+        self.detail_skills_label.configure(text=self.t("detail_skills", skills=skills) if skills else self.t("detail_skills_empty"))
         self.detail_description_box.configure(state="normal")
         self.detail_description_box.delete("1.0", "end")
         self.detail_description_box.insert("1.0", job.get("description") or "-")
@@ -721,7 +798,7 @@ class MainWindow(ctk.CTk):
         self.displayed_jobs = list(jobs)
         self.tree.delete(*self.tree.get_children())
         for idx, j in enumerate(jobs):
-            job_type = "Oferta real" if j.get("type") == "api_result" else "Enlace de búsqueda"
+            job_type = self.t("type_api") if j.get("type") == "api_result" else self.t("type_search")
             bg_tag = "api" if j.get("type") == "api_result" else "search"
             match = j.get("match", 0) or 0
             match_tag = "match_high" if match >= 70 else "match_mid" if match >= 40 else "match_low"
@@ -729,14 +806,19 @@ class MainWindow(ctk.CTk):
                 f"{match}%", j.get("title", ""), j.get("company", ""), j.get("location", ""),
                 j.get("source", ""), j.get("published_date", ""), job_type,
             ), tags=(bg_tag, match_tag))
-        self.result_count_label.configure(text=f"{len(jobs)} resultados")
+        self.result_count_label.configure(text=self.t("result_count", n=len(jobs)))
         if jobs:
             self.empty_state_label.place_forget()
         else:
-            self.empty_state_label.configure(text="Todavía no hay resultados.\nElige tus filtros y pulsa Buscar ofertas.")
+            self.empty_state_label.configure(text=self.t("empty_results"))
             self.empty_state_label.place(relx=0.5, rely=0.5, anchor="center")
         self.selected_job = None
         self._render_detail(None)
+
+    def _refresh_tree_type_labels(self):
+        for idx, j in enumerate(self.displayed_jobs):
+            job_type = self.t("type_api") if j.get("type") == "api_result" else self.t("type_search")
+            self.tree.set(str(idx), "type", job_type)
 
     def get_selected_job(self):
         sel = self.tree.selection()
@@ -757,32 +839,32 @@ class MainWindow(ctk.CTk):
     def open_selected(self):
         j = self.get_selected_job()
         if not j:
-            messagebox.showwarning(APP_NAME, "Selecciona un resultado antes de abrir el enlace.")
+            messagebox.showwarning(APP_NAME, self.t("select_result_open_link"))
             return
         if j.get("apply_url"):
             webbrowser.open(j["apply_url"])
             return
-        messagebox.showwarning(APP_NAME, "El resultado seleccionado no tiene enlace para abrir.")
+        messagebox.showwarning(APP_NAME, self.t("no_link_available"))
 
     def open_fallback(self):
         j = self.get_selected_job()
         if not j:
-            messagebox.showwarning(APP_NAME, "Selecciona un resultado antes de abrir el fallback.")
+            messagebox.showwarning(APP_NAME, self.t("select_result_fallback"))
             return
         if j.get("fallback_url"):
             webbrowser.open(j["fallback_url"])
             return
-        messagebox.showwarning(APP_NAME, "El resultado seleccionado no tiene fallback disponible.")
+        messagebox.showwarning(APP_NAME, self.t("no_fallback_available"))
 
     def apply_quick_filter(self, event=None):
         q = self.quick_filter_entry.get().lower().strip()
         if not q:
             self.populate_tree(self.jobs)
-            self.status_label.configure(text="Filtro limpio")
+            self.status_label.configure(text=self.t("status_filter_clean"))
             return
         filtered = [j for j in self.jobs if q in " ".join(str(v) for v in j.values()).lower()]
         self.populate_tree(filtered)
-        self.status_label.configure(text=f"{len(filtered)} filtrados")
+        self.status_label.configure(text=self.t("status_filtered", n=len(filtered)))
 
     # ---------- Status bar ----------
 
@@ -790,14 +872,14 @@ class MainWindow(ctk.CTk):
         status_bar = ctk.CTkFrame(self, height=theme.STATUSBAR_HEIGHT, corner_radius=0, fg_color=(theme.GRAY_LIGHT, theme.GRAY_DARK))
         status_bar.grid(row=2, column=0, columnspan=2, sticky="ew")
         status_bar.grid_propagate(False)
-        self.status_label = ctk.CTkLabel(status_bar, text="Listo", font=theme.FONT_SMALL, text_color=theme.TEXT_MUTED)
+        self.status_label = ctk.CTkLabel(status_bar, text=self.t("status_ready"), font=theme.FONT_SMALL, text_color=theme.TEXT_MUTED)
         self.status_label.pack(side="left", padx=12)
 
-        credit_label = ctk.CTkLabel(
-            status_bar, text=f"{APP_NAME} v{APP_VERSION} · Creado por {APP_AUTHOR}",
+        self.credit_label = ctk.CTkLabel(
+            status_bar, text=f"{APP_NAME} v{APP_VERSION} · {self.t('credit')} {APP_AUTHOR}",
             font=theme.FONT_SMALL, text_color=theme.TEXT_MUTED,
         )
-        credit_label.pack(side="right", padx=12)
+        self.credit_label.pack(side="right", padx=12)
 
     # ---------- Search ----------
 
@@ -823,7 +905,7 @@ class MainWindow(ctk.CTk):
                 elif kind == "done":
                     self._finish_search(item.get("jobs", []), item.get("errors", []))
                 elif kind == "fatal":
-                    self._fail_search(item.get("message", "Se produjo un error inesperado."))
+                    self._fail_search(item.get("message", self.t("unexpected_error")))
         except queue.Empty:
             pass
         if self.search_in_progress:
@@ -831,65 +913,64 @@ class MainWindow(ctk.CTk):
 
     def _fail_search(self, message):
         logger.error(message)
-        self._set_search_state(False, "Error en la búsqueda")
+        self._set_search_state(False, self.t("status_search_error"))
         messagebox.showerror(APP_NAME, message)
 
     def _build_error_message(self, errors, no_results=False):
         lines = []
         if no_results:
-            lines.append("No se encontraron resultados porque algunas fuentes fallaron o no devolvieron coincidencias.")
+            lines.append(self.t("no_results_some_failed"))
         else:
-            lines.append("Se encontraron resultados, pero algunas fuentes fallaron.")
+            lines.append(self.t("results_some_failed"))
         for error in errors:
-            source = error.get("source", "Fuente")
+            source = error.get("source") or self.t("source_fallback_label")
             kind = error.get("kind", "api")
-            message = error.get("message", "")
             if kind == "timeout":
-                label = "Tiempo de espera agotado"
+                label = self.t("error_timeout")
             elif kind == "connection":
-                label = "Error de conexión"
+                label = self.t("error_connection")
             elif kind == "invalid_response":
-                label = "Respuesta invalida"
+                label = self.t("error_invalid_response")
             elif kind == "dependency":
-                label = "Dependencia faltante"
+                label = self.t("error_dependency")
             elif kind == "api":
-                label = "Error de API"
+                label = self.t("error_api")
             else:
-                label = "Error inesperado"
-            lines.append(f"- {source}: {label}. {message}")
+                label = self.t("error_unexpected")
+            lines.append(f"- {source}: {label}.")
         return "\n".join(lines)
 
     def _finish_search(self, jobs, errors):
         self.jobs = dedupe_jobs(jobs)
         self.populate_tree(self.jobs)
         self.save_config(silent=True)
-        self._set_search_state(False, f"Búsqueda completada: {len(self.jobs)} resultados")
+        self._set_search_state(False, self.t("status_search_done", n=len(self.jobs)))
         if not self.jobs and errors:
             messagebox.showerror(APP_NAME, self._build_error_message(errors, no_results=True))
         elif not self.jobs:
-            messagebox.showinfo(APP_NAME, "No se encontraron resultados para los criterios seleccionados.")
+            messagebox.showinfo(APP_NAME, self.t("no_results_found"))
         elif errors:
             messagebox.showwarning(APP_NAME, self._build_error_message(errors, no_results=False))
 
-    def _search_jobs_worker(self, roles, locs, sources, profile_keywords, source_domains):
+    def _search_jobs_worker(self, roles, locs, sources, profile_keywords, source_domains, lang):
         jobs = []
         errors = []
         try:
-            self._queue_status("Generando enlaces de búsqueda...")
-            jobs += make_search_links(roles, locs, sources, profile_keywords, source_domains)
+            self._queue_status(t(lang, "status_generating_links"))
+            jobs += make_search_links(roles, locs, sources, profile_keywords, source_domains, lang=lang)
 
             if "RemoteOK API" in sources:
-                self._queue_status("Consultando RemoteOK...")
+                self._queue_status(t(lang, "status_querying_remoteok"))
                 try:
-                    jobs += fetch_remoteok(roles, profile_keywords)
+                    jobs += fetch_remoteok(roles, profile_keywords, lang=lang)
                 except SourceFetchError as error:
                     logger.warning("%s", error.message)
                     errors.append({"source": error.source, "kind": error.kind, "message": error.message})
 
             if "Remotive API" in sources:
-                self._queue_status("Consultando Remotive...")
+                self._queue_status(t(lang, "status_querying_remotive"))
                 try:
-                    jobs += fetch_remotive(roles, profile_keywords)
+                    jobs += fetch_remotive(roles, profile_keywords, lang=lang)
                 except SourceFetchError as error:
                     logger.warning("%s", error.message)
                     errors.append({"source": error.source, "kind": error.kind, "message": error.message})
@@ -897,7 +978,7 @@ class MainWindow(ctk.CTk):
             self.search_queue.put({"kind": "done", "jobs": jobs, "errors": errors})
         except Exception as error:
             logger.exception("Unexpected error during job search")
-            self.search_queue.put({"kind": "fatal", "message": f"Se produjo un error inesperado durante la búsqueda: {error}"})
+            self.search_queue.put({"kind": "fatal", "message": t(lang, "unexpected_search_error", error=error)})
 
     def search_jobs(self):
         if self.search_in_progress:
@@ -906,7 +987,7 @@ class MainWindow(ctk.CTk):
         locs = self.selected_locations()
         sources = self.selected_sources()
         if not roles:
-            messagebox.showwarning(APP_NAME, "Selecciona al menos una categoría.")
+            messagebox.showwarning(APP_NAME, self.t("select_one_role"))
             return
         profile_keywords = self.selected_keywords()
         self.save_config(silent=True)
@@ -915,14 +996,14 @@ class MainWindow(ctk.CTk):
         self.selected_job = None
         self._render_detail(None)
         self.tree.delete(*self.tree.get_children())
-        self.empty_state_label.configure(text="Buscando...")
+        self.empty_state_label.configure(text=self.t("searching"))
         self.empty_state_label.place(relx=0.5, rely=0.5, anchor="center")
-        self.result_count_label.configure(text="0 resultados")
+        self.result_count_label.configure(text=self.t("result_count", n=0))
         self.search_queue = queue.Queue()
-        self._set_search_state(True, "Buscando...")
+        self._set_search_state(True, self.t("searching"))
         worker = threading.Thread(
             target=self._search_jobs_worker,
-            args=(roles, locs, sources, profile_keywords, self.all_source_domains()),
+            args=(roles, locs, sources, profile_keywords, self.all_source_domains(), self.language),
             daemon=True,
         )
         worker.start()
@@ -932,7 +1013,7 @@ class MainWindow(ctk.CTk):
 
     def export_all(self):
         if not self.jobs:
-            messagebox.showwarning(APP_NAME, "No hay resultados para exportar.")
+            messagebox.showwarning(APP_NAME, self.t("no_results_to_export"))
             return
         try:
             RESULTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -940,25 +1021,26 @@ class MainWindow(ctk.CTk):
             txt = RESULTS_DIR / f"job_results_{stamp}.txt"
             csvp = RESULTS_DIR / f"job_results_{stamp}.csv"
             html = RESULTS_DIR / f"job_results_{stamp}.html"
-            export_txt(self.jobs, txt)
+            export_txt(self.jobs, txt, lang=self.language)
             export_csv(self.jobs, csvp)
-            export_html(self.jobs, html)
+            export_html(self.jobs, html, lang=self.language)
             messagebox.showinfo(
                 APP_NAME,
-                f"Exportado en:\n{RESULTS_DIR}\n\nArchivos creados:\n- {txt.name}\n- {csvp.name}\n- {html.name}",
+                self.t("export_success", dir=RESULTS_DIR, txt=txt.name, csv=csvp.name, html=html.name),
             )
             webbrowser.open(str(html))
         except (OSError, PermissionError) as error:
             logger.exception("Export failed")
-            messagebox.showerror(APP_NAME, f"No se pudo exportar por un problema de escritura:\n{error}")
+            messagebox.showerror(APP_NAME, self.t("export_write_error", error=error))
         except Exception as error:
             logger.exception("Unexpected export error")
-            messagebox.showerror(APP_NAME, f"Error inesperado al exportar:\n{error}")
+            messagebox.showerror(APP_NAME, self.t("export_unexpected_error", error=error))
 
     # ---------- Config persistence ----------
 
     def save_config(self, silent=False):
         cfg = {
+            "language": self.language,
             "roles_list": [{"name": k, "enabled": v.get()} for k, v in self.role_vars.items()],
             "roles": {k: v.get() for k, v in self.role_vars.items()},
             "locations_list": [{"name": k, "enabled": v.get()} for k, v in self.location_vars.items()],
@@ -980,11 +1062,11 @@ class MainWindow(ctk.CTk):
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
                 json.dump(cfg, f, indent=2, ensure_ascii=False)
             if not silent:
-                messagebox.showinfo(APP_NAME, f"Configuración guardada en:\n{CONFIG_FILE}")
+                messagebox.showinfo(APP_NAME, self.t("config_saved", path=CONFIG_FILE))
         except OSError as error:
             logger.exception("Unable to save configuration")
             if not silent:
-                messagebox.showerror(APP_NAME, f"No se pudo guardar la configuración:\n{error}")
+                messagebox.showerror(APP_NAME, self.t("config_save_error", error=error))
 
     def load_config(self):
         if CONFIG_FILE.exists():
@@ -997,6 +1079,10 @@ class MainWindow(ctk.CTk):
             return
         try:
             cfg = json.loads(config_path.read_text(encoding="utf-8"))
+            saved_language = cfg.get("language")
+            if saved_language in ("es", "en") and saved_language != self.language:
+                self.language = saved_language
+                self._apply_language()
             roles_list = cfg.get("roles_list")
             if roles_list is not None:
                 for role in list(self.role_vars.keys()):
@@ -1063,4 +1149,4 @@ class MainWindow(ctk.CTk):
             self.save_config(silent=True)
         except Exception as error:
             logger.exception("Unable to load configuration")
-            messagebox.showwarning(APP_NAME, f"No se pudo cargar la configuración guardada:\n{error}")
+            messagebox.showwarning(APP_NAME, self.t("config_load_error", error=error))

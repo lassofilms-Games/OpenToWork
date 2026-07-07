@@ -31,7 +31,7 @@ def normalize_text(s):
     return re.sub(r"\s+", " ", (s or "")).strip()
 
 
-def score_job(title, description, company, location, profile_keywords=None, active_roles=None):
+def score_job(title, description, company, location, profile_keywords=None, active_roles=None, is_search_link=False):
     text = f"{title} {description} {company} {location}".lower()
     title_l = (title or "").lower()
     profile_keywords = profile_keywords or DEFAULT_PROFILE_KEYWORDS
@@ -58,7 +58,7 @@ def score_job(title, description, company, location, profile_keywords=None, acti
         if bad in text:
             score -= 35
             found.append(f"exclude:{bad}")
-    if active_roles and not role_hit and not title.lower().startswith("buscar:"):
+    if active_roles and not role_hit and not is_search_link:
         score -= 25
         found.append("penalty:no_active_category")
     return max(0, min(100, score)), found
