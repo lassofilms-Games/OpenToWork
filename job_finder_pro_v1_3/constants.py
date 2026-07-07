@@ -2,6 +2,7 @@ from pathlib import Path
 
 APP_NAME = "OPentowork_app"
 APP_VERSION = "1.3.0"
+APP_AUTHOR = "Diego Lasso"
 BASE_DIR = Path(__file__).resolve().parent
 
 DEFAULT_ROLES = [

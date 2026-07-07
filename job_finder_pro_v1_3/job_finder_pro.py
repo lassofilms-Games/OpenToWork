@@ -6,9 +6,9 @@ from datetime import datetime
 from tkinter import ttk, messagebox
 import tkinter as tk
 
-from constants import APP_NAME, APP_VERSION, DEFAULT_ROLES, DEFAULT_LOCATIONS, DEFAULT_SOURCES
+from constants import APP_NAME, APP_VERSION, APP_AUTHOR, DEFAULT_ROLES, DEFAULT_LOCATIONS, DEFAULT_SOURCES
 from core.scoring import DEFAULT_PROFILE_KEYWORDS, normalize_text
-from core.sources import SourceFetchError, make_search_links, fetch_remoteok, fetch_remotive, dedupe_jobs
+from core.sources import SourceFetchError, SOURCE_DOMAINS, make_search_links, fetch_remoteok, fetch_remotive, dedupe_jobs
 from core.export import now_stamp, export_txt, export_csv, export_html
 from core.config_store import RESULTS_DIR, CONFIG_FILE, LEGACY_CONFIG_FILE, find_legacy_appdata_config
 from core.logging_setup import setup_logging
@@ -31,6 +31,9 @@ class JobFinderApp(tk.Tk):
         self.keyword_vars = {}
         self.keyword_weight_vars = {}
         self.keyword_widgets = {}
+        self.custom_source_vars = {}
+        self.custom_source_domains = {}
+        self.custom_source_widgets = {}
         self.displayed_jobs = []
         self.search_queue = queue.Queue()
         self.search_in_progress = False
@@ -131,6 +134,22 @@ class JobFinderApp(tk.Tk):
             ttk.Checkbutton(left, text=src, variable=v).pack(anchor="w")
 
         ttk.Separator(left).pack(fill="x", pady=8)
+        ttk.Label(left, text="Fuentes personalizadas", font=("Segoe UI", 11, "bold")).pack(anchor="w")
+        ttk.Label(left, text="Añade otros portales de empleo por dominio").pack(anchor="w")
+        self.custom_sources_frame = ttk.Frame(left)
+        self.custom_sources_frame.pack(fill="x", pady=(4, 4))
+
+        ttk.Label(left, text="Nombre de la fuente").pack(anchor="w", pady=(8, 0))
+        self.new_custom_source_name = ttk.Entry(left, width=34)
+        self.new_custom_source_name.pack(fill="x")
+        ttk.Label(left, text="Dominio (ej: indeed.com)").pack(anchor="w", pady=(4, 0))
+        self.new_custom_source_domain = ttk.Entry(left, width=34)
+        self.new_custom_source_domain.pack(fill="x")
+        self.new_custom_source_domain.bind("<Return>", lambda e: self.add_custom_source())
+        ttk.Button(left, text="+ Añadir fuente", command=self.add_custom_source).pack(fill="x", pady=4)
+        ttk.Button(left, text="Eliminar fuentes personalizadas desmarcadas", command=self.delete_unchecked_custom_sources).pack(fill="x", pady=(0,4))
+
+        ttk.Separator(left).pack(fill="x", pady=8)
         self.search_button = ttk.Button(left, text="Buscar ofertas", command=self.search_jobs)
         self.search_button.pack(fill="x", pady=3)
         self.export_button = ttk.Button(left, text="Exportar TXT/CSV/HTML", command=self.export_all)
@@ -171,6 +190,10 @@ class JobFinderApp(tk.Tk):
         details_frame.grid(row=2, column=0, sticky="ew")
         self.details = tk.Text(details_frame, height=10, wrap="word")
         self.details.pack(fill="both", expand=True)
+
+        footer = ttk.Frame(right)
+        footer.grid(row=3, column=0, sticky="ew", pady=(4, 0))
+        ttk.Label(footer, text=f"{APP_NAME} v{APP_VERSION} · Creado por {APP_AUTHOR}", foreground="#888888").pack(side="right")
 
     def _set_search_state(self, busy, message=None):
         self.search_in_progress = busy
@@ -242,12 +265,12 @@ class JobFinderApp(tk.Tk):
         elif errors:
             messagebox.showwarning(APP_NAME, self._build_error_message(errors, no_results=False))
 
-    def _search_jobs_worker(self, roles, locs, sources, profile_keywords):
+    def _search_jobs_worker(self, roles, locs, sources, profile_keywords, source_domains):
         jobs = []
         errors = []
         try:
             self._queue_status("Generando enlaces de búsqueda...")
-            jobs += make_search_links(roles, locs, sources, profile_keywords)
+            jobs += make_search_links(roles, locs, sources, profile_keywords, source_domains)
 
             if "RemoteOK API" in sources:
                 self._queue_status("Consultando RemoteOK...")
@@ -366,6 +389,61 @@ class JobFinderApp(tk.Tk):
             for keyword in to_delete:
                 self.delete_keyword(keyword)
 
+    def create_custom_source_row(self, name, domain, enabled=True):
+        name = normalize_text(name)
+        domain = normalize_text(domain).lower()
+        if not name or not domain or name in self.custom_source_vars:
+            return
+        v = tk.BooleanVar(value=enabled)
+        self.custom_source_vars[name] = v
+        self.custom_source_domains[name] = domain
+
+        row = ttk.Frame(self.custom_sources_frame)
+        row.pack(fill="x", anchor="w")
+        cb = ttk.Checkbutton(row, text=f"{name} ({domain})", variable=v)
+        cb.pack(side="left", fill="x", expand=True, anchor="w")
+        btn = ttk.Button(row, text="✕", width=3, command=lambda n=name: self.delete_custom_source(n))
+        btn.pack(side="right")
+        self.custom_source_widgets[name] = row
+
+    def add_custom_source(self):
+        name = normalize_text(self.new_custom_source_name.get())
+        domain = normalize_text(self.new_custom_source_domain.get()).lower()
+        domain = domain.replace("https://", "").replace("http://", "").strip("/")
+        if not name or not domain:
+            messagebox.showwarning(APP_NAME, "Indica un nombre y un dominio para la fuente personalizada.")
+            return
+        if name in self.custom_source_vars:
+            self.custom_source_vars[name].set(True)
+            self.custom_source_domains[name] = domain
+        else:
+            self.create_custom_source_row(name, domain, enabled=True)
+        self.new_custom_source_name.delete(0, "end")
+        self.new_custom_source_domain.delete(0, "end")
+        self.save_config(silent=True)
+
+    def delete_custom_source(self, name):
+        widget = self.custom_source_widgets.pop(name, None)
+        if widget is not None:
+            widget.destroy()
+        self.custom_source_vars.pop(name, None)
+        self.custom_source_domains.pop(name, None)
+        self.save_config(silent=True)
+
+    def delete_unchecked_custom_sources(self):
+        to_delete = [n for n, v in self.custom_source_vars.items() if not v.get()]
+        if not to_delete:
+            messagebox.showinfo(APP_NAME, "No hay fuentes personalizadas desmarcadas para eliminar.")
+            return
+        if messagebox.askyesno(APP_NAME, f"¿Eliminar {len(to_delete)} fuente(s) personalizada(s) desmarcada(s)?"):
+            for name in to_delete:
+                self.delete_custom_source(name)
+
+    def all_source_domains(self):
+        domains = dict(SOURCE_DOMAINS)
+        domains.update(self.custom_source_domains)
+        return domains
+
     def selected_keywords(self):
         out = {}
         for k, enabled in self.keyword_vars.items():
@@ -391,7 +469,9 @@ class JobFinderApp(tk.Tk):
         return locs or ["Remote"]
 
     def selected_sources(self):
-        return [s for s, v in self.source_vars.items() if v.get()]
+        sources = [s for s, v in self.source_vars.items() if v.get()]
+        sources += [s for s, v in self.custom_source_vars.items() if v.get()]
+        return sources
 
     def search_jobs(self):
         if self.search_in_progress:
@@ -414,7 +494,7 @@ class JobFinderApp(tk.Tk):
         self._set_search_state(True, "Buscando...")
         worker = threading.Thread(
             target=self._search_jobs_worker,
-            args=(roles, locs, sources, profile_keywords),
+            args=(roles, locs, sources, profile_keywords, self.all_source_domains()),
             daemon=True,
         )
         worker.start()
@@ -533,6 +613,10 @@ class JobFinderApp(tk.Tk):
             "locations": {k: v.get() for k, v in self.location_vars.items()},
             "custom_location": self.custom_location.get(),
             "sources": {k: v.get() for k, v in self.source_vars.items()},
+            "custom_sources_list": [
+                {"name": k, "domain": self.custom_source_domains[k], "enabled": v.get()}
+                for k, v in self.custom_source_vars.items()
+            ],
             "keywords_list": [
                 {"name": k, "enabled": self.keyword_vars[k].get(), "points": int(self.keyword_weight_vars[k].get())}
                 for k in self.keyword_vars.keys()
@@ -590,7 +674,16 @@ class JobFinderApp(tk.Tk):
             for k, val in cfg.get("sources", {}).items():
                 if k in self.source_vars:
                     self.source_vars[k].set(bool(val))
-            if config_path != CONFIG_FILE and not CONFIG_FILE.exists():
+            custom_sources_list = cfg.get("custom_sources_list")
+            if custom_sources_list is not None:
+                for name in list(self.custom_source_vars.keys()):
+                    self.delete_custom_source(name)
+                for item in custom_sources_list:
+                    name = normalize_text(item.get("name", ""))
+                    domain = normalize_text(item.get("domain", "")).lower()
+                    if name and domain:
+                        self.create_custom_source_row(name, domain, enabled=bool(item.get("enabled", True)))
+            if config_path != CONFIG_FILE:
                 self.save_config(silent=True)
         except Exception as error:
             logger.exception("Unable to load configuration")

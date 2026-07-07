@@ -59,7 +59,8 @@ def build_google_url(role, location, domain):
     return "https://www.google.com/search?q=" + urllib.parse.quote_plus(query)
 
 
-def build_source_url(source, role, location):
+def build_source_url(source, role, location, source_domains=None):
+    domains = SOURCE_DOMAINS if source_domains is None else source_domains
     q = urllib.parse.quote_plus(role)
     loc = urllib.parse.quote_plus(location)
     if source == "LinkedIn Jobs":
@@ -78,18 +79,19 @@ def build_source_url(source, role, location):
         return f"https://www.glassdoor.es/Empleo/{loc}-{q}-empleos-SRCH_IL.0,9_IC2629524_KO10,{10+len(role)}.htm"
     if source == "ArtStation Jobs":
         return f"https://www.artstation.com/jobs?search={q}"
-    return build_google_url(role, location, SOURCE_DOMAINS.get(source, ""))
+    return build_google_url(role, location, domains.get(source, ""))
 
 
-def make_search_links(roles, locations, sources, profile_keywords=None):
+def make_search_links(roles, locations, sources, profile_keywords=None, source_domains=None):
+    domains = SOURCE_DOMAINS if source_domains is None else source_domains
     jobs = []
     for role in roles:
         for loc in locations:
             for src in sources:
                 if src in ["RemoteOK API", "Remotive API"]:
                     continue
-                domain = SOURCE_DOMAINS.get(src, "")
-                direct = build_source_url(src, role, loc)
+                domain = domains.get(src, "")
+                direct = build_source_url(src, role, loc, domains)
                 google = build_google_url(role, loc, domain) if domain else direct
                 title = f"Buscar: {role}"
                 desc = f"Búsqueda directa en {src} para {role} en {loc}. Si el link directo falla, usa el fallback de Google."

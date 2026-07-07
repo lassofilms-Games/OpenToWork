@@ -2,7 +2,7 @@ import csv
 from datetime import datetime
 from html import escape
 
-from constants import APP_NAME, APP_VERSION
+from constants import APP_NAME, APP_VERSION, APP_AUTHOR
 
 
 def now_stamp():
@@ -12,6 +12,7 @@ def now_stamp():
 def export_txt(jobs, path):
     with open(path, "w", encoding="utf-8") as f:
         f.write(f"{APP_NAME} v{APP_VERSION}\n")
+        f.write(f"Creado por {APP_AUTHOR}\n")
         f.write(f"Exportado: {datetime.now().strftime('%Y-%m-%d %H:%M')}\n")
         f.write("="*90 + "\n\n")
         for i, j in enumerate(jobs, 1):
@@ -57,7 +58,7 @@ def export_html(jobs, path):
         </tr>""")
     html = f"""<!doctype html><html><head><meta charset='utf-8'><title>{APP_NAME}</title>
     <style>body{{font-family:Arial;margin:24px}}table{{border-collapse:collapse;width:100%}}td,th{{border:1px solid #ddd;padding:8px}}th{{background:#111;color:white}}tr:nth-child(even){{background:#f5f5f5}}</style></head>
-    <body><h1>{APP_NAME}</h1><p>Exportado: {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
+    <body><h1>{APP_NAME}</h1><p>Creado por {APP_AUTHOR} · Exportado: {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
     <table><thead><tr><th>Match</th><th>Publicado</th><th>Título</th><th>Empresa</th><th>Ubicación</th><th>Fuente</th><th>Link</th><th>Google</th></tr></thead><tbody>{''.join(rows)}</tbody></table></body></html>"""
     with open(path, "w", encoding="utf-8") as f:
         f.write(html)

@@ -1,7 +1,7 @@
 import customtkinter as ctk
 from PIL import Image
 
-from constants import APP_NAME, APP_VERSION
+from constants import APP_NAME, APP_VERSION, APP_AUTHOR
 from ui import theme
 
 
@@ -120,3 +120,9 @@ class MainWindow(ctk.CTk):
         status_bar.grid_propagate(False)
         self.status_label = ctk.CTkLabel(status_bar, text="Listo", font=theme.FONT_SMALL, text_color=theme.TEXT_MUTED)
         self.status_label.pack(side="left", padx=12)
+
+        credit_label = ctk.CTkLabel(
+            status_bar, text=f"{APP_NAME} v{APP_VERSION} · Creado por {APP_AUTHOR}",
+            font=theme.FONT_SMALL, text_color=theme.TEXT_MUTED,
+        )
+        credit_label.pack(side="right", padx=12)
