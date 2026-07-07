@@ -96,7 +96,7 @@ class JobFinderApp(tk.Tk):
         self.new_role.pack(fill="x")
         self.new_role.bind("<Return>", lambda e: self.add_role())
         ttk.Button(left, text="+ Añadir", command=self.add_role).pack(fill="x", pady=4)
-        ttk.Button(left, text="Eliminar categorías desmarcadas", command=self.delete_unchecked_roles).pack(fill="x", pady=(0,4))
+        ttk.Button(left, text="Eliminar desmarcadas", command=self.delete_unchecked_roles).pack(fill="x", pady=(0,4))
 
         ttk.Separator(left).pack(fill="x", pady=8)
         ttk.Label(left, text="Keywords / Match", font=("Segoe UI", 11, "bold")).pack(anchor="w")
@@ -115,7 +115,7 @@ class JobFinderApp(tk.Tk):
         self.new_keyword_points.pack(side="left", padx=(4, 0))
         self.new_keyword.bind("<Return>", lambda e: self.add_keyword())
         ttk.Button(left, text="+ Añadir keyword", command=self.add_keyword).pack(fill="x", pady=4)
-        ttk.Button(left, text="Eliminar keywords desmarcadas", command=self.delete_unchecked_keywords).pack(fill="x", pady=(0,4))
+        ttk.Button(left, text="Eliminar desmarcadas", command=self.delete_unchecked_keywords).pack(fill="x", pady=(0,4))
 
         ttk.Separator(left).pack(fill="x", pady=8)
         ttk.Label(left, text="Ubicación", font=("Segoe UI", 11, "bold")).pack(anchor="w")
@@ -129,7 +129,7 @@ class JobFinderApp(tk.Tk):
         self.custom_location.pack(fill="x")
         self.custom_location.bind("<Return>", lambda e: self.add_location())
         ttk.Button(left, text="+ Añadir", command=self.add_location).pack(fill="x", pady=4)
-        ttk.Button(left, text="Eliminar ubicaciones desmarcadas", command=self.delete_unchecked_locations).pack(fill="x", pady=(0,4))
+        ttk.Button(left, text="Eliminar desmarcadas", command=self.delete_unchecked_locations).pack(fill="x", pady=(0,4))
 
         ttk.Separator(left).pack(fill="x", pady=8)
         ttk.Label(left, text="Fuentes", font=("Segoe UI", 11, "bold")).pack(anchor="w")
@@ -137,7 +137,7 @@ class JobFinderApp(tk.Tk):
         self.sources_frame.pack(fill="x", pady=(4, 4))
         for src, enabled in DEFAULT_SOURCES.items():
             self.create_source_row(src, enabled=enabled)
-        ttk.Button(left, text="Eliminar fuentes desmarcadas", command=self.delete_unchecked_sources).pack(fill="x", pady=(0,4))
+        ttk.Button(left, text="Eliminar desmarcadas", command=self.delete_unchecked_sources).pack(fill="x", pady=(0,4))
 
         ttk.Separator(left).pack(fill="x", pady=8)
         ttk.Label(left, text="Fuentes personalizadas", font=("Segoe UI", 11, "bold")).pack(anchor="w")
@@ -153,7 +153,7 @@ class JobFinderApp(tk.Tk):
         self.new_custom_source_domain.pack(fill="x")
         self.new_custom_source_domain.bind("<Return>", lambda e: self.add_custom_source())
         ttk.Button(left, text="+ Añadir fuente", command=self.add_custom_source).pack(fill="x", pady=4)
-        ttk.Button(left, text="Eliminar fuentes personalizadas desmarcadas", command=self.delete_unchecked_custom_sources).pack(fill="x", pady=(0,4))
+        ttk.Button(left, text="Eliminar desmarcadas", command=self.delete_unchecked_custom_sources).pack(fill="x", pady=(0,4))
 
         ttk.Separator(left).pack(fill="x", pady=8)
         self.search_button = ttk.Button(left, text="Buscar ofertas", command=self.search_jobs)

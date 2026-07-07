@@ -133,13 +133,13 @@ class MainWindow(ctk.CTk):
         self.export_button = ctk.CTkButton(
             actions, text="Exportar TXT/CSV/HTML", fg_color="transparent", border_width=1,
             border_color=theme.GRAY, text_color=theme.TEXT_MUTED, hover_color=theme.GRAY_LIGHT,
-            command=self.export_all,
+            command=self.export_all, anchor="w",
         )
         self.export_button.pack(fill="x", pady=(0, 6))
         self.save_button = ctk.CTkButton(
             actions, text="Guardar configuración", fg_color="transparent", border_width=1,
             border_color=theme.GRAY, text_color=theme.TEXT_MUTED, hover_color=theme.GRAY_LIGHT,
-            command=self.save_config,
+            command=self.save_config, anchor="w",
         )
         self.save_button.pack(fill="x")
 
@@ -150,6 +150,7 @@ class MainWindow(ctk.CTk):
         ctk.CTkButton(
             parent, text=text, height=26, font=theme.FONT_SMALL, fg_color="transparent",
             text_color=theme.TEXT_MUTED, hover_color=theme.GRAY_LIGHT, command=command,
+            anchor="w",
         ).pack(fill="x", pady=(4, 0))
 
     def _build_roles_section(self, parent):
@@ -168,7 +169,7 @@ class MainWindow(ctk.CTk):
             add_row, text="+", width=32, command=self.add_role,
             fg_color=theme.GREEN, hover_color=theme.GREEN_HOVER,
         ).pack(side="left", padx=(4, 0))
-        self._small_action_button(parent, "Eliminar categorías desmarcadas", self.delete_unchecked_roles)
+        self._small_action_button(parent, "Eliminar desmarcadas", self.delete_unchecked_roles)
 
     def _build_location_section(self, parent):
         self._section_label(parent, "Ubicación")
@@ -186,7 +187,7 @@ class MainWindow(ctk.CTk):
             add_row, text="+", width=32, command=self.add_location,
             fg_color=theme.GREEN, hover_color=theme.GREEN_HOVER,
         ).pack(side="left", padx=(4, 0))
-        self._small_action_button(parent, "Eliminar ubicaciones desmarcadas", self.delete_unchecked_locations)
+        self._small_action_button(parent, "Eliminar desmarcadas", self.delete_unchecked_locations)
 
     def _build_sources_section(self, parent):
         self._section_label(parent, "Fuentes")
@@ -194,7 +195,7 @@ class MainWindow(ctk.CTk):
         self.sources_frame.pack(fill="x")
         for src, enabled in DEFAULT_SOURCES.items():
             self.create_source_row(src, enabled=enabled)
-        self._small_action_button(parent, "Eliminar fuentes desmarcadas", self.delete_unchecked_sources)
+        self._small_action_button(parent, "Eliminar desmarcadas", self.delete_unchecked_sources)
 
     def _build_custom_sources_section(self, parent):
         self._section_label(parent, "Fuentes personalizadas")
@@ -215,7 +216,7 @@ class MainWindow(ctk.CTk):
             parent, text="+ Añadir fuente", command=self.add_custom_source,
             fg_color=theme.GREEN, hover_color=theme.GREEN_HOVER,
         ).pack(fill="x", pady=(4, 0))
-        self._small_action_button(parent, "Eliminar fuentes personalizadas desmarcadas", self.delete_unchecked_custom_sources)
+        self._small_action_button(parent, "Eliminar desmarcadas", self.delete_unchecked_custom_sources)
 
     def _build_keywords_section(self, parent):
         self._section_label(parent, "Keywords / Match")
@@ -236,7 +237,7 @@ class MainWindow(ctk.CTk):
             parent, text="+ Añadir keyword", command=self.add_keyword,
             fg_color=theme.GREEN, hover_color=theme.GREEN_HOVER,
         ).pack(fill="x", pady=(4, 0))
-        self._small_action_button(parent, "Eliminar keywords desmarcadas", self.delete_unchecked_keywords)
+        self._small_action_button(parent, "Eliminar desmarcadas", self.delete_unchecked_keywords)
 
     # ---------- Roles ----------
 
