@@ -27,7 +27,9 @@ class JobFinderApp(tk.Tk):
         self.role_vars = {}
         self.role_widgets = {}
         self.location_vars = {}
+        self.location_widgets = {}
         self.source_vars = {}
+        self.source_widgets = {}
         self.keyword_vars = {}
         self.keyword_weight_vars = {}
         self.keyword_widgets = {}
@@ -117,21 +119,25 @@ class JobFinderApp(tk.Tk):
 
         ttk.Separator(left).pack(fill="x", pady=8)
         ttk.Label(left, text="Ubicación", font=("Segoe UI", 11, "bold")).pack(anchor="w")
+        self.locations_frame = ttk.Frame(left)
+        self.locations_frame.pack(fill="x", pady=(4, 4))
         for loc in DEFAULT_LOCATIONS:
-            v = tk.BooleanVar(value=True)
-            self.location_vars[loc] = v
-            ttk.Checkbutton(left, text=loc, variable=v).pack(anchor="w")
+            self.create_location_row(loc, enabled=True)
 
-        ttk.Label(left, text="Otra ubicación").pack(anchor="w", pady=(8,0))
+        ttk.Label(left, text="Añadir ubicación").pack(anchor="w", pady=(8,0))
         self.custom_location = ttk.Entry(left, width=34)
         self.custom_location.pack(fill="x")
+        self.custom_location.bind("<Return>", lambda e: self.add_location())
+        ttk.Button(left, text="+ Añadir", command=self.add_location).pack(fill="x", pady=4)
+        ttk.Button(left, text="Eliminar ubicaciones desmarcadas", command=self.delete_unchecked_locations).pack(fill="x", pady=(0,4))
 
         ttk.Separator(left).pack(fill="x", pady=8)
         ttk.Label(left, text="Fuentes", font=("Segoe UI", 11, "bold")).pack(anchor="w")
+        self.sources_frame = ttk.Frame(left)
+        self.sources_frame.pack(fill="x", pady=(4, 4))
         for src, enabled in DEFAULT_SOURCES.items():
-            v = tk.BooleanVar(value=enabled)
-            self.source_vars[src] = v
-            ttk.Checkbutton(left, text=src, variable=v).pack(anchor="w")
+            self.create_source_row(src, enabled=enabled)
+        ttk.Button(left, text="Eliminar fuentes desmarcadas", command=self.delete_unchecked_sources).pack(fill="x", pady=(0,4))
 
         ttk.Separator(left).pack(fill="x", pady=8)
         ttk.Label(left, text="Fuentes personalizadas", font=("Segoe UI", 11, "bold")).pack(anchor="w")
@@ -389,6 +395,80 @@ class JobFinderApp(tk.Tk):
             for keyword in to_delete:
                 self.delete_keyword(keyword)
 
+    def create_location_row(self, location, enabled=True):
+        location = normalize_text(location)
+        if not location or location in self.location_vars:
+            return
+        v = tk.BooleanVar(value=enabled)
+        self.location_vars[location] = v
+
+        row = ttk.Frame(self.locations_frame)
+        row.pack(fill="x", anchor="w")
+        cb = ttk.Checkbutton(row, text=location, variable=v)
+        cb.pack(side="left", fill="x", expand=True, anchor="w")
+        btn = ttk.Button(row, text="✕", width=3, command=lambda l=location: self.delete_location(l))
+        btn.pack(side="right")
+        self.location_widgets[location] = row
+
+    def add_location(self):
+        location = normalize_text(self.custom_location.get())
+        if not location:
+            return
+        if location in self.location_vars:
+            self.location_vars[location].set(True)
+            self.custom_location.delete(0, "end")
+            return
+        self.create_location_row(location, enabled=True)
+        self.custom_location.delete(0, "end")
+        self.save_config(silent=True)
+
+    def delete_location(self, location):
+        widget = self.location_widgets.pop(location, None)
+        if widget is not None:
+            widget.destroy()
+        self.location_vars.pop(location, None)
+        self.save_config(silent=True)
+
+    def delete_unchecked_locations(self):
+        to_delete = [l for l, v in self.location_vars.items() if not v.get()]
+        if not to_delete:
+            messagebox.showinfo(APP_NAME, "No hay ubicaciones desmarcadas para eliminar.")
+            return
+        if messagebox.askyesno(APP_NAME, f"¿Eliminar {len(to_delete)} ubicación(es) desmarcada(s)?"):
+            for location in to_delete:
+                self.delete_location(location)
+
+    def create_source_row(self, source, enabled=True):
+        source = normalize_text(source)
+        if not source or source in self.source_vars:
+            return
+        v = tk.BooleanVar(value=enabled)
+        self.source_vars[source] = v
+
+        row = ttk.Frame(self.sources_frame)
+        row.pack(fill="x", anchor="w")
+        cb = ttk.Checkbutton(row, text=source, variable=v)
+        cb.pack(side="left", fill="x", expand=True, anchor="w")
+        btn = ttk.Button(row, text="✕", width=3, command=lambda s=source: self.delete_source(s))
+        btn.pack(side="right")
+        self.source_widgets[source] = row
+
+    def delete_source(self, source):
+        widget = self.source_widgets.pop(source, None)
+        if widget is not None:
+            widget.destroy()
+        self.source_vars.pop(source, None)
+        self.save_config(silent=True)
+
+    def delete_unchecked_sources(self):
+        to_delete = [s for s, v in self.source_vars.items() if not v.get()]
+        if not to_delete:
+            messagebox.showinfo(APP_NAME, "No hay fuentes desmarcadas para eliminar.")
+            return
+        if messagebox.askyesno(APP_NAME, f"¿Eliminar {len(to_delete)} fuente(s) desmarcada(s)?"):
+            for source in to_delete:
+                self.delete_source(source)
+
     def create_custom_source_row(self, name, domain, enabled=True):
         name = normalize_text(name)
         domain = normalize_text(domain).lower()
@@ -464,7 +544,7 @@ class JobFinderApp(tk.Tk):
     def selected_locations(self):
         locs = [l for l, v in self.location_vars.items() if v.get()]
         custom = normalize_text(self.custom_location.get())
-        if custom:
+        if custom and custom not in locs:
             locs.append(custom)
         return locs or ["Remote"]
 
@@ -610,8 +690,10 @@ class JobFinderApp(tk.Tk):
         cfg = {
             "roles_list": [{"name": k, "enabled": v.get()} for k, v in self.role_vars.items()],
             "roles": {k: v.get() for k, v in self.role_vars.items()},
+            "locations_list": [{"name": k, "enabled": v.get()} for k, v in self.location_vars.items()],
             "locations": {k: v.get() for k, v in self.location_vars.items()},
             "custom_location": self.custom_location.get(),
+            "sources_list": [{"name": k, "enabled": v.get()} for k, v in self.source_vars.items()],
             "sources": {k: v.get() for k, v in self.source_vars.items()},
             "custom_sources_list": [
                 {"name": k, "domain": self.custom_source_domains[k], "enabled": v.get()}
@@ -666,14 +748,36 @@ class JobFinderApp(tk.Tk):
                     name = normalize_text(item.get("name", "")).lower()
                     if name:
                         self.create_keyword_row(name, item.get("points", 10), enabled=bool(item.get("enabled", True)))
-            for k, val in cfg.get("locations", {}).items():
-                if k in self.location_vars:
-                    self.location_vars[k].set(bool(val))
+            locations_list = cfg.get("locations_list")
+            if locations_list is not None:
+                for loc in list(self.location_vars.keys()):
+                    self.delete_location(loc)
+                for item in locations_list:
+                    name = normalize_text(item.get("name", ""))
+                    if name:
+                        self.create_location_row(name, enabled=bool(item.get("enabled", True)))
+            else:
+                for k, val in cfg.get("locations", {}).items():
+                    if k in self.location_vars:
+                        self.location_vars[k].set(bool(val))
+                    else:
+                        self.create_location_row(k, enabled=bool(val))
             self.custom_location.delete(0, "end")
             self.custom_location.insert(0, cfg.get("custom_location", ""))
-            for k, val in cfg.get("sources", {}).items():
-                if k in self.source_vars:
-                    self.source_vars[k].set(bool(val))
+            sources_list = cfg.get("sources_list")
+            if sources_list is not None:
+                for src in list(self.source_vars.keys()):
+                    self.delete_source(src)
+                for item in sources_list:
+                    name = normalize_text(item.get("name", ""))
+                    if name:
+                        self.create_source_row(name, enabled=bool(item.get("enabled", True)))
+            else:
+                for k, val in cfg.get("sources", {}).items():
+                    if k in self.source_vars:
+                        self.source_vars[k].set(bool(val))
+                    else:
+                        self.create_source_row(k, enabled=bool(val))
             custom_sources_list = cfg.get("custom_sources_list")
             if custom_sources_list is not None:
                 for name in list(self.custom_source_vars.keys()):
