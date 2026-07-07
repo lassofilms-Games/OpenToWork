@@ -590,13 +590,116 @@ class MainWindow(ctk.CTk):
         )
         self.empty_state_label.place(relx=0.5, rely=0.5, anchor="center")
 
-        self.detail_frame = ctk.CTkFrame(main_area, corner_radius=10, height=90)
+        self._build_detail_panel(main_area)
+
+    def _build_detail_panel(self, main_area):
+        self.detail_frame = ctk.CTkFrame(main_area, corner_radius=10, height=220)
         self.detail_frame.grid(row=1, column=0, sticky="ew", pady=(12, 0))
         self.detail_frame.grid_propagate(False)
-        ctk.CTkLabel(
-            self.detail_frame, text="Selecciona un resultado para ver el detalle. (Paso 6)",
+        self.detail_frame.grid_rowconfigure(0, weight=1)
+        self.detail_frame.grid_columnconfigure(0, weight=1)
+
+        self.detail_empty_label = ctk.CTkLabel(
+            self.detail_frame, text="Selecciona un resultado para ver el detalle.",
             font=theme.FONT_BODY, text_color=theme.TEXT_MUTED,
-        ).place(relx=0.5, rely=0.5, anchor="center")
+        )
+        self.detail_empty_label.place(relx=0.5, rely=0.5, anchor="center")
+
+        self.detail_content = ctk.CTkFrame(self.detail_frame, fg_color="transparent")
+        self.detail_content.grid_columnconfigure(0, weight=1)
+        self.detail_content.grid_columnconfigure(1, weight=0)
+        self.detail_content.grid_rowconfigure(3, weight=1)
+
+        header_row = ctk.CTkFrame(self.detail_content, fg_color="transparent")
+        header_row.grid(row=0, column=0, sticky="ew", padx=16, pady=(12, 0))
+        self.detail_type_badge = ctk.CTkLabel(
+            header_row, text="", font=theme.FONT_SMALL, corner_radius=6, width=110,
+        )
+        self.detail_type_badge.pack(side="left")
+        self.detail_match_badge = ctk.CTkLabel(
+            header_row, text="", font=("Segoe UI", 13, "bold"), corner_radius=6, width=54,
+        )
+        self.detail_match_badge.pack(side="left", padx=(8, 0))
+        self.detail_title_label = ctk.CTkLabel(header_row, text="", font=theme.FONT_TITLE, anchor="w")
+        self.detail_title_label.pack(side="left", padx=(12, 0), fill="x", expand=True)
+
+        self.detail_subtitle_label = ctk.CTkLabel(
+            self.detail_content, text="", font=theme.FONT_BODY, text_color=theme.TEXT_MUTED,
+            anchor="w", justify="left",
+        )
+        self.detail_subtitle_label.grid(row=1, column=0, sticky="ew", padx=16, pady=(6, 0))
+
+        self.detail_skills_label = ctk.CTkLabel(
+            self.detail_content, text="", font=theme.FONT_SMALL, text_color=theme.TEXT_MUTED,
+            anchor="w", justify="left",
+        )
+        self.detail_skills_label.grid(row=2, column=0, sticky="ew", padx=16, pady=(4, 0))
+
+        self.detail_description_box = ctk.CTkTextbox(
+            self.detail_content, height=70, font=theme.FONT_SMALL, wrap="word",
+            fg_color=theme.GRAY_LIGHT, text_color="#1A1A1A",
+        )
+        self.detail_description_box.grid(row=3, column=0, sticky="nsew", padx=16, pady=(8, 12))
+
+        buttons_col = ctk.CTkFrame(self.detail_content, fg_color="transparent")
+        buttons_col.grid(row=0, column=1, rowspan=4, sticky="n", padx=16, pady=12)
+        self.detail_open_button = ctk.CTkButton(
+            buttons_col, text="🔗 Abrir enlace", fg_color=theme.GREEN, hover_color=theme.GREEN_HOVER,
+            command=self.open_selected,
+        )
+        self.detail_open_button.pack(fill="x", pady=(0, 6))
+        self.detail_fallback_button = ctk.CTkButton(
+            buttons_col, text="Abrir fallback Google", fg_color="transparent", border_width=1,
+            border_color=theme.GRAY, text_color=theme.TEXT_MUTED, hover_color=theme.GRAY_LIGHT,
+            command=self.open_fallback,
+        )
+        self.detail_fallback_button.pack(fill="x", pady=(0, 6))
+        self.detail_export_button = ctk.CTkButton(
+            buttons_col, text="📤 Exportar todo", fg_color="transparent", border_width=1,
+            border_color=theme.GRAY, text_color=theme.TEXT_MUTED, hover_color=theme.GRAY_LIGHT,
+            command=self.export_all,
+        )
+        self.detail_export_button.pack(fill="x")
+
+        future_row = ctk.CTkFrame(self.detail_content, fg_color="transparent")
+        future_row.grid(row=4, column=0, columnspan=2, sticky="ew", padx=16, pady=(0, 10))
+        for future_text in ("⭐ Favorito", "✔ Aplicado", "✕ Descartado", "📝 Notas"):
+            ctk.CTkLabel(
+                future_row, text=f"{future_text} (próximamente)", font=theme.FONT_SMALL,
+                text_color=theme.TEXT_MUTED,
+            ).pack(side="left", padx=(0, 16))
+
+    def _render_detail(self, job):
+        if not job:
+            self.detail_content.grid_forget()
+            self.detail_empty_label.place(relx=0.5, rely=0.5, anchor="center")
+            return
+        self.detail_empty_label.place_forget()
+        self.detail_content.grid(row=0, column=0, sticky="nsew")
+
+        is_api = job.get("type") == "api_result"
+        self.detail_type_badge.configure(
+            text="Oferta real" if is_api else "Enlace de búsqueda",
+            fg_color=theme.GREEN if is_api else theme.GRAY,
+            text_color=theme.WHITE if is_api else "#333333",
+        )
+        match = job.get("match", 0) or 0
+        match_color = "#0F7B2E" if match >= 70 else "#9A6B00" if match >= 40 else theme.TEXT_MUTED[0]
+        self.detail_match_badge.configure(text=f"{match}%", text_color=match_color, fg_color=theme.GRAY_LIGHT)
+        self.detail_title_label.configure(text=job.get("title") or "-")
+        self.detail_subtitle_label.configure(
+            text=(
+                f"{job.get('company', '-')}  ·  {job.get('location', '-')}  ·  {job.get('source', '-')}\n"
+                f"Publicado: {job.get('published_date', 'No disponible')}   ·   "
+                f"Detectado: {job.get('detected_date', '-')}"
+            )
+        )
+        skills = job.get("skills_found", "")
+        self.detail_skills_label.configure(text=f"Skills: {skills}" if skills else "Skills: -")
+        self.detail_description_box.configure(state="normal")
+        self.detail_description_box.delete("1.0", "end")
+        self.detail_description_box.insert("1.0", job.get("description") or "-")
+        self.detail_description_box.configure(state="disabled")
 
     def populate_tree(self, jobs):
         self.displayed_jobs = list(jobs)
@@ -616,6 +719,8 @@ class MainWindow(ctk.CTk):
         else:
             self.empty_state_label.configure(text="Todavía no hay resultados.\nElige tus filtros y pulsa Buscar ofertas.")
             self.empty_state_label.place(relx=0.5, rely=0.5, anchor="center")
+        self.selected_job = None
+        self._render_detail(None)
 
     def get_selected_job(self):
         sel = self.tree.selection()
@@ -631,6 +736,7 @@ class MainWindow(ctk.CTk):
 
     def _on_tree_select(self, event=None):
         self.selected_job = self.get_selected_job()
+        self._render_detail(self.selected_job)
 
     def open_selected(self):
         j = self.get_selected_job()
@@ -641,6 +747,16 @@ class MainWindow(ctk.CTk):
             webbrowser.open(j["apply_url"])
             return
         messagebox.showwarning(APP_NAME, "El resultado seleccionado no tiene enlace para abrir.")
+
+    def open_fallback(self):
+        j = self.get_selected_job()
+        if not j:
+            messagebox.showwarning(APP_NAME, "Selecciona un resultado antes de abrir el fallback.")
+            return
+        if j.get("fallback_url"):
+            webbrowser.open(j["fallback_url"])
+            return
+        messagebox.showwarning(APP_NAME, "El resultado seleccionado no tiene fallback disponible.")
 
     def apply_quick_filter(self, event=None):
         q = self.quick_filter_entry.get().lower().strip()
@@ -780,6 +896,8 @@ class MainWindow(ctk.CTk):
         self.save_config(silent=True)
         self.jobs = []
         self.displayed_jobs = []
+        self.selected_job = None
+        self._render_detail(None)
         self.tree.delete(*self.tree.get_children())
         self.empty_state_label.configure(text="Buscando...")
         self.empty_state_label.place(relx=0.5, rely=0.5, anchor="center")
