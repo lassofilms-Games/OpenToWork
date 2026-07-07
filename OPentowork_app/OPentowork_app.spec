@@ -5,7 +5,7 @@ datas = [('assets', 'assets')]
 datas += collect_data_files('customtkinter')
 
 a = Analysis(
-    ['job_finder_pro.py'],
+    ['opentowork_app.py'],
     pathex=[],
     binaries=[],
     datas=datas,

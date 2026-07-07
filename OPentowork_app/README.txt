@@ -12,7 +12,7 @@ Install dependencies
 
 Run from Python
 - Run:
-  python job_finder_pro.py
+  python opentowork_app.py
 
 Build the EXE
 - Run:
@@ -23,7 +23,7 @@ Build the EXE
 Where files are saved
 - Configuration: %APPDATA%\OPentowork_app\config.json
 - Results: %APPDATA%\OPentowork_app\results\
-- Logs: %APPDATA%\OPentowork_app\logs\job_finder_pro.log
+- Logs: %APPDATA%\OPentowork_app\logs\opentowork_app.log
 
 How to use
 1. Choose roles, keywords, locations and sources in the sidebar.

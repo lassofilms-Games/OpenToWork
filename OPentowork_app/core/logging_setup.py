@@ -3,11 +3,11 @@ from logging.handlers import RotatingFileHandler
 
 from core.config_store import LOGS_DIR
 
-LOG_FILE = LOGS_DIR / "job_finder_pro.log"
+LOG_FILE = LOGS_DIR / "opentowork_app.log"
 
 
 def setup_logging():
-    logger = logging.getLogger("JobFinderPro")
+    logger = logging.getLogger("OPentowork_app")
     logger.setLevel(logging.INFO)
     logger.propagate = False
     if not logger.handlers:
