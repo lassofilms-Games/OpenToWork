@@ -13,6 +13,20 @@ GRAY_DARK = "#242428"
 WHITE = "#FFFFFF"
 TEXT_MUTED = ("#5B5B60", "#9B9BA1")
 
+# Pares (claro, oscuro) para elementos que no son widgets CTk nativos
+# (ttk.Treeview no sigue customtkinter.set_appearance_mode automáticamente).
+TABLE_BG = (WHITE, "#1E1E22")
+TABLE_FG = ("#1A1A1A", "#E8E8EA")
+TABLE_HEADING_BG = (GRAY_LIGHT, "#2A2A2E")
+ROW_API_BG = ("#E9F7EC", "#123319")
+ROW_SEARCH_BG = ("#F4F4F6", "#2A2A2E")
+MATCH_HIGH = ("#0F7B2E", "#4ADE80")
+MATCH_MID = ("#9A6B00", "#F5C451")
+MATCH_LOW = ("#6B6B70", "#9B9BA1")
+SELECTION_BG = ("#D7EFDC", "#1F4B2C")
+SELECTION_FG = ("#0A3D14", "#BEE8C8")
+DESCRIPTION_BG = (GRAY_LIGHT, "#2A2A2E")
+
 FONT_FAMILY = "Segoe UI"
 FONT_TITLE = (FONT_FAMILY, 18, "bold")
 FONT_SECTION = (FONT_FAMILY, 13, "bold")

@@ -106,6 +106,8 @@ class MainWindow(ctk.CTk):
         else:
             ctk.set_appearance_mode("light")
             self.theme_button.configure(text="🌙")
+        self._setup_treeview_style()
+        self._render_detail(self.selected_job)
 
     # ---------- Sidebar ----------
 
@@ -538,21 +540,34 @@ class MainWindow(ctk.CTk):
 
     # ---------- Main area: results table ----------
 
+    def _dark_mode_index(self):
+        return 1 if ctk.get_appearance_mode() == "Dark" else 0
+
     def _setup_treeview_style(self):
+        idx = self._dark_mode_index()
         style = ttk.Style()
         try:
             style.theme_use("clam")
         except Exception:
             pass
         style.configure(
-            "OTW.Treeview", background=theme.WHITE, fieldbackground=theme.WHITE,
-            foreground="#1A1A1A", rowheight=26, borderwidth=0, font=theme.FONT_BODY,
+            "OTW.Treeview", background=theme.TABLE_BG[idx], fieldbackground=theme.TABLE_BG[idx],
+            foreground=theme.TABLE_FG[idx], rowheight=26, borderwidth=0, font=theme.FONT_BODY,
         )
         style.configure(
-            "OTW.Treeview.Heading", background=theme.GRAY_LIGHT, foreground="#1A1A1A",
+            "OTW.Treeview.Heading", background=theme.TABLE_HEADING_BG[idx], foreground=theme.TABLE_FG[idx],
             font=theme.FONT_SECTION, relief="flat",
         )
-        style.map("OTW.Treeview", background=[("selected", "#D7EFDC")], foreground=[("selected", "#0A3D14")])
+        style.map(
+            "OTW.Treeview", background=[("selected", theme.SELECTION_BG[idx])],
+            foreground=[("selected", theme.SELECTION_FG[idx])],
+        )
+        if hasattr(self, "tree"):
+            self.tree.tag_configure("api", background=theme.ROW_API_BG[idx])
+            self.tree.tag_configure("search", background=theme.ROW_SEARCH_BG[idx])
+            self.tree.tag_configure("match_high", foreground=theme.MATCH_HIGH[idx])
+            self.tree.tag_configure("match_mid", foreground=theme.MATCH_MID[idx])
+            self.tree.tag_configure("match_low", foreground=theme.MATCH_LOW[idx])
 
     def _build_main_area(self):
         main_area = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
@@ -565,7 +580,6 @@ class MainWindow(ctk.CTk):
         self.table_frame.grid_rowconfigure(0, weight=1)
         self.table_frame.grid_columnconfigure(0, weight=1)
 
-        self._setup_treeview_style()
         columns = ("match", "title", "company", "location", "source", "published", "type")
         headings = {
             "match": "Match", "title": "Título", "company": "Empresa", "location": "Ubicación",
@@ -576,11 +590,7 @@ class MainWindow(ctk.CTk):
         for c in columns:
             self.tree.heading(c, text=headings[c])
             self.tree.column(c, width=widths[c], anchor="w")
-        self.tree.tag_configure("api", background="#E9F7EC")
-        self.tree.tag_configure("search", background="#F4F4F6")
-        self.tree.tag_configure("match_high", foreground="#0F7B2E")
-        self.tree.tag_configure("match_mid", foreground="#9A6B00")
-        self.tree.tag_configure("match_low", foreground="#6B6B70")
+        self._setup_treeview_style()
         self.tree.grid(row=0, column=0, sticky="nsew", padx=(1, 0), pady=1)
         self.tree.bind("<<TreeviewSelect>>", self._on_tree_select)
         self.tree.bind("<Double-1>", lambda e: self.open_selected())
@@ -591,7 +601,7 @@ class MainWindow(ctk.CTk):
 
         self.empty_state_label = ctk.CTkLabel(
             self.table_frame, text="Todavía no hay resultados.\nElige tus filtros y pulsa Buscar ofertas.",
-            font=theme.FONT_BODY, text_color=theme.TEXT_MUTED, justify="center", fg_color=theme.WHITE,
+            font=theme.FONT_BODY, text_color=theme.TEXT_MUTED, justify="center", fg_color=theme.TABLE_BG,
         )
         self.empty_state_label.place(relx=0.5, rely=0.5, anchor="center")
 
@@ -642,7 +652,7 @@ class MainWindow(ctk.CTk):
 
         self.detail_description_box = ctk.CTkTextbox(
             self.detail_content, height=70, font=theme.FONT_SMALL, wrap="word",
-            fg_color=theme.GRAY_LIGHT, text_color="#1A1A1A",
+            fg_color=theme.DESCRIPTION_BG, text_color=theme.TABLE_FG,
         )
         self.detail_description_box.grid(row=3, column=0, sticky="nsew", padx=16, pady=(8, 12))
 
@@ -689,8 +699,9 @@ class MainWindow(ctk.CTk):
             text_color=theme.WHITE if is_api else "#333333",
         )
         match = job.get("match", 0) or 0
-        match_color = "#0F7B2E" if match >= 70 else "#9A6B00" if match >= 40 else theme.TEXT_MUTED[0]
-        self.detail_match_badge.configure(text=f"{match}%", text_color=match_color, fg_color=theme.GRAY_LIGHT)
+        idx = self._dark_mode_index()
+        match_color = theme.MATCH_HIGH[idx] if match >= 70 else theme.MATCH_MID[idx] if match >= 40 else theme.MATCH_LOW[idx]
+        self.detail_match_badge.configure(text=f"{match}%", text_color=match_color, fg_color=theme.DESCRIPTION_BG)
         self.detail_title_label.configure(text=job.get("title") or "-")
         self.detail_subtitle_label.configure(
             text=(

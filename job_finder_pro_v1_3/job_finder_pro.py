@@ -2,7 +2,6 @@ import json
 import queue
 import threading
 import webbrowser
-from datetime import datetime
 from tkinter import ttk, messagebox
 import tkinter as tk
 
