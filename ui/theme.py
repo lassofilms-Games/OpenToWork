@@ -29,6 +29,12 @@ DESCRIPTION_BG = (GRAY_LIGHT, "#2A2A2E")
 # Fondo de los divisores arrastrables (tk.PanedWindow tampoco sigue el modo CTk).
 WINDOW_BG = ("#EBEBEB", "#242424")
 
+# Estados por oferta (Fase 2): Favorito / Aplicado / Descartado
+STATE_FAVORITE = "#D08700"
+STATE_APPLIED = GREEN
+STATE_DISCARDED = "#6B6B70"
+ROW_DISCARDED_FG = ("#A6A6AC", "#5E5E64")
+
 FONT_FAMILY = "Segoe UI"
 FONT_TITLE = (FONT_FAMILY, 18, "bold")
 FONT_SECTION = (FONT_FAMILY, 13, "bold")

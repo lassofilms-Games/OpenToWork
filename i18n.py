@@ -51,11 +51,11 @@ STRINGS = {
         "detail_skills_empty": "Keywords encontradas en esta oferta: ninguna",
         "detail_subtitle": "{company}  ·  {location}  ·  {source}\nPublicado: {published}   ·   Detectado: {detected}",
         "not_available": "No disponible",
-        "future_favorite": "⭐ Favorito",
-        "future_applied": "✔ Aplicado",
-        "future_discarded": "✕ Descartado",
-        "future_notes": "📝 Notas",
-        "future_suffix": "(próximamente)",
+        "col_state": "Estado",
+        "mark_favorite": "⭐ Favorito",
+        "mark_applied": "✔ Aplicado",
+        "mark_discarded": "✕ Descartado",
+        "notes_placeholder": "Notas de esta oferta... (Enter para guardar)",
 
         # Status bar
         "status_ready": "Listo",
@@ -185,11 +185,11 @@ STRINGS = {
         "detail_skills_empty": "Keywords found in this offer: none",
         "detail_subtitle": "{company}  ·  {location}  ·  {source}\nPublished: {published}   ·   Detected: {detected}",
         "not_available": "Not available",
-        "future_favorite": "⭐ Favorite",
-        "future_applied": "✔ Applied",
-        "future_discarded": "✕ Discarded",
-        "future_notes": "📝 Notes",
-        "future_suffix": "(coming soon)",
+        "col_state": "Status",
+        "mark_favorite": "⭐ Favorite",
+        "mark_applied": "✔ Applied",
+        "mark_discarded": "✕ Discarded",
+        "notes_placeholder": "Notes for this offer... (Enter to save)",
 
         # Status bar
         "status_ready": "Ready",

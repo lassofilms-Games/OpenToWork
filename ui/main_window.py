@@ -14,6 +14,7 @@ from core.scoring import DEFAULT_PROFILE_KEYWORDS, normalize_text
 from core.sources import SourceFetchError, SOURCE_DOMAINS, make_search_links, fetch_remoteok, fetch_remotive, dedupe_jobs
 from core.export import now_stamp, export_txt, export_csv, export_html
 from core.config_store import RESULTS_DIR, CONFIG_FILE, LEGACY_CONFIG_FILE, find_legacy_appdata_config
+from core.job_states import job_key, load_states, save_states
 from core.logging_setup import setup_logging
 from i18n import t
 from ui import theme
@@ -52,7 +53,7 @@ class MainWindow(ctk.CTk):
         self.export_button = None
         self.save_button = None
         self.delete_unchecked_buttons = []
-        self.future_row_labels = []
+        self.job_states = load_states()
 
         self._build_layout()
         self.load_config()
@@ -161,6 +162,7 @@ class MainWindow(ctk.CTk):
         self.add_keyword_button.configure(text=self.t("add_keyword_button"))
 
         headings = {
+            "state": self.t("col_state"),
             "match": self.t("col_match"), "title": self.t("col_title"), "company": self.t("col_company"),
             "location": self.t("col_location"), "source": self.t("col_source"),
             "published": self.t("col_published"), "type": self.t("col_type"),
@@ -171,8 +173,10 @@ class MainWindow(ctk.CTk):
         self.detail_open_button.configure(text=self.t("open_link_button"))
         self.detail_fallback_button.configure(text=self.t("open_fallback_button"))
         self.detail_export_button.configure(text=self.t("export_all_button"))
-        for label, key in self.future_row_labels:
-            label.configure(text=f"{self.t(key)} {self.t('future_suffix')}")
+        self.favorite_button.configure(text=self.t("mark_favorite"))
+        self.applied_button.configure(text=self.t("mark_applied"))
+        self.discarded_button.configure(text=self.t("mark_discarded"))
+        self.notes_entry.configure(placeholder_text=self.t("notes_placeholder"))
 
         self.status_label.configure(text=self.t("status_ready"))
         self.credit_label.configure(text=f"{APP_NAME} v{APP_VERSION} · {self.t('credit')} {APP_AUTHOR}")
@@ -664,6 +668,7 @@ class MainWindow(ctk.CTk):
             self.tree.tag_configure("match_high", foreground=theme.MATCH_HIGH[idx])
             self.tree.tag_configure("match_mid", foreground=theme.MATCH_MID[idx])
             self.tree.tag_configure("match_low", foreground=theme.MATCH_LOW[idx])
+            self.tree.tag_configure("discarded", foreground=theme.ROW_DISCARDED_FG[idx])
 
     def _build_main_area(self):
         self.v_paned = tk.PanedWindow(self.h_paned, orient="vertical", sashwidth=6, bd=0, relief="flat")
@@ -674,13 +679,14 @@ class MainWindow(ctk.CTk):
         self.table_frame.grid_rowconfigure(0, weight=1)
         self.table_frame.grid_columnconfigure(0, weight=1)
 
-        columns = ("match", "title", "company", "location", "source", "published", "type")
+        columns = ("state", "match", "title", "company", "location", "source", "published", "type")
         headings = {
+            "state": self.t("col_state"),
             "match": self.t("col_match"), "title": self.t("col_title"), "company": self.t("col_company"),
             "location": self.t("col_location"), "source": self.t("col_source"),
             "published": self.t("col_published"), "type": self.t("col_type"),
         }
-        widths = {"match": 70, "title": 260, "company": 150, "location": 140, "source": 130, "published": 100, "type": 150}
+        widths = {"state": 70, "match": 60, "title": 250, "company": 150, "location": 130, "source": 130, "published": 100, "type": 140}
         self.tree = ttk.Treeview(self.table_frame, columns=columns, show="headings", style="OTW.Treeview")
         for c in columns:
             self.tree.heading(c, text=headings[c])
@@ -773,15 +779,108 @@ class MainWindow(ctk.CTk):
         )
         self.detail_export_button.pack(fill="x")
 
-        future_row = ctk.CTkFrame(self.detail_content, fg_color="transparent")
-        future_row.grid(row=4, column=0, columnspan=2, sticky="ew", padx=16, pady=(0, 10))
-        for future_key in ("future_favorite", "future_applied", "future_discarded", "future_notes"):
-            future_label = ctk.CTkLabel(
-                future_row, text=f"{self.t(future_key)} {self.t('future_suffix')}", font=theme.FONT_SMALL,
-                text_color=theme.TEXT_MUTED,
+        state_row = ctk.CTkFrame(self.detail_content, fg_color="transparent")
+        state_row.grid(row=4, column=0, columnspan=2, sticky="ew", padx=16, pady=(0, 10))
+        self.favorite_button = ctk.CTkButton(
+            state_row, text=self.t("mark_favorite"), width=104, height=26, font=theme.FONT_SMALL,
+            command=lambda: self._toggle_state_flag("favorite"),
+        )
+        self.favorite_button.pack(side="left", padx=(0, 6))
+        self.applied_button = ctk.CTkButton(
+            state_row, text=self.t("mark_applied"), width=104, height=26, font=theme.FONT_SMALL,
+            command=lambda: self._toggle_state_flag("applied"),
+        )
+        self.applied_button.pack(side="left", padx=(0, 6))
+        self.discarded_button = ctk.CTkButton(
+            state_row, text=self.t("mark_discarded"), width=104, height=26, font=theme.FONT_SMALL,
+            command=lambda: self._toggle_state_flag("discarded"),
+        )
+        self.discarded_button.pack(side="left", padx=(0, 12))
+        self.notes_entry = ctk.CTkEntry(state_row, height=26, font=theme.FONT_SMALL, placeholder_text=self.t("notes_placeholder"))
+        self.notes_entry.pack(side="left", fill="x", expand=True)
+        self.notes_entry.bind("<Return>", lambda e: self._save_notes())
+        self.notes_entry.bind("<FocusOut>", lambda e: self._save_notes())
+        for button in (self.favorite_button, self.applied_button, self.discarded_button):
+            self._style_state_button(button, active=False, active_color=theme.GREEN)
+
+    # ---------- Estado por oferta (Favorito / Aplicado / Descartado / Notas) ----------
+
+    def _get_state(self, job):
+        return self.job_states.get(job_key(job), {})
+
+    def _update_state(self, job, **changes):
+        key = job_key(job)
+        if not key:
+            return
+        state = dict(self.job_states.get(key, {}))
+        state.update(changes)
+        if not any((state.get("favorite"), state.get("applied"), state.get("discarded"), (state.get("notes") or "").strip())):
+            self.job_states.pop(key, None)
+        else:
+            state["title"] = job.get("title", "")
+            self.job_states[key] = state
+        save_states(self.job_states)
+        self._refresh_row_state(job)
+
+    def _state_icons(self, job):
+        state = self._get_state(job)
+        icons = ""
+        if state.get("favorite"):
+            icons += "⭐"
+        if state.get("applied"):
+            icons += "✔"
+        if state.get("discarded"):
+            icons += "✕"
+        if (state.get("notes") or "").strip():
+            icons += "📝"
+        return icons
+
+    def _row_tags(self, job):
+        bg_tag = "api" if job.get("type") == "api_result" else "search"
+        match = job.get("match", 0) or 0
+        match_tag = "match_high" if match >= 70 else "match_mid" if match >= 40 else "match_low"
+        if self._get_state(job).get("discarded"):
+            # "discarded" primero: en Treeview el primer tag gana el color de texto.
+            return ("discarded", bg_tag)
+        return (bg_tag, match_tag)
+
+    def _refresh_row_state(self, job):
+        key = job_key(job)
+        for idx, displayed in enumerate(self.displayed_jobs):
+            if job_key(displayed) == key:
+                self.tree.set(str(idx), "state", self._state_icons(displayed))
+                self.tree.item(str(idx), tags=self._row_tags(displayed))
+
+    def _toggle_state_flag(self, flag):
+        job = self.selected_job
+        if not job:
+            return
+        new_value = not bool(self._get_state(job).get(flag))
+        self._update_state(job, **{flag: new_value})
+        self._render_state_controls(job)
+
+    def _style_state_button(self, button, active, active_color):
+        if active:
+            button.configure(fg_color=active_color, hover_color=active_color, text_color=theme.WHITE, border_width=0)
+        else:
+            button.configure(
+                fg_color="transparent", hover_color=theme.GRAY_LIGHT, text_color=theme.TEXT_MUTED,
+                border_width=1, border_color=theme.GRAY,
             )
-            future_label.pack(side="left", padx=(0, 16))
-            self.future_row_labels.append((future_label, future_key))
+
+    def _render_state_controls(self, job):
+        state = self._get_state(job)
+        self._style_state_button(self.favorite_button, bool(state.get("favorite")), theme.STATE_FAVORITE)
+        self._style_state_button(self.applied_button, bool(state.get("applied")), theme.STATE_APPLIED)
+        self._style_state_button(self.discarded_button, bool(state.get("discarded")), theme.STATE_DISCARDED)
+
+    def _save_notes(self):
+        job = self.selected_job
+        if not job or not hasattr(self, "notes_entry"):
+            return
+        notes = self.notes_entry.get().strip()
+        if notes != (self._get_state(job).get("notes") or "").strip():
+            self._update_state(job, notes=notes)
 
     def _render_detail(self, job):
         if not job:
@@ -832,6 +931,12 @@ class MainWindow(ctk.CTk):
         self._highlight_keywords_in_description(description, found_keywords)
         self.detail_description_box.configure(state="disabled")
 
+        self._render_state_controls(job)
+        self.notes_entry.delete(0, "end")
+        notes = (self._get_state(job).get("notes") or "").strip()
+        if notes:
+            self.notes_entry.insert(0, notes)
+
     def _highlight_keywords_in_description(self, description, keywords):
         # Enlace visual keywords <-> oferta: resalta en verde las apariciones
         # de las keywords encontradas dentro de la descripción.
@@ -853,17 +958,17 @@ class MainWindow(ctk.CTk):
                 box.tag_add("kw_hit", f"1.0+{start}c", f"1.0+{end}c")
 
     def populate_tree(self, jobs):
+        self._save_notes()
         self.displayed_jobs = list(jobs)
         self.tree.delete(*self.tree.get_children())
         for idx, j in enumerate(jobs):
             job_type = self.t("type_api") if j.get("type") == "api_result" else self.t("type_search")
-            bg_tag = "api" if j.get("type") == "api_result" else "search"
             match = j.get("match", 0) or 0
-            match_tag = "match_high" if match >= 70 else "match_mid" if match >= 40 else "match_low"
             self.tree.insert("", "end", iid=str(idx), values=(
+                self._state_icons(j),
                 f"{match}%", j.get("title", ""), j.get("company", ""), j.get("location", ""),
                 j.get("source", ""), j.get("published_date", ""), job_type,
-            ), tags=(bg_tag, match_tag))
+            ), tags=self._row_tags(j))
         self.result_count_label.configure(text=self.t("result_count", n=len(jobs)))
         if jobs:
             self.empty_state_label.place_forget()
@@ -891,6 +996,8 @@ class MainWindow(ctk.CTk):
             return None
 
     def _on_tree_select(self, event=None):
+        # Guarda las notas de la oferta anterior antes de cambiar de selección.
+        self._save_notes()
         self.selected_job = self.get_selected_job()
         self._render_detail(self.selected_job)
 
@@ -1049,6 +1156,7 @@ class MainWindow(ctk.CTk):
             return
         profile_keywords = self.selected_keywords()
         self.save_config(silent=True)
+        self._save_notes()
         self.jobs = []
         self.displayed_jobs = []
         self.selected_job = None

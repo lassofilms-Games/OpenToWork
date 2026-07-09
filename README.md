@@ -9,9 +9,11 @@ Aplicación de escritorio en Python (CustomTkinter) para buscar ofertas de emple
 - **Roles, ubicaciones, fuentes y keywords** totalmente configurables desde la barra lateral, con puntuación de match (0-100%) por oferta.
 - **Fuentes personalizadas**: añade cualquier portal de empleo por nombre + dominio, sin tocar código.
 - **Tabla de resultados** con color por tipo (oferta real vs. enlace de búsqueda) y por score de match.
-- **Panel de detalle** con descripción, skills detectadas, y accesos directos para abrir el enlace o el fallback de Google.
+- **Panel de detalle** con descripción (keywords resaltadas), y accesos directos para abrir el enlace o el fallback de Google.
+- **Seguimiento por oferta**: marca ⭐ Favorito, ✔ Aplicado o ✕ Descartado y escribe notas propias — persiste entre sesiones y se ve de un vistazo en la columna Estado.
 - **Exportación** a TXT, CSV y HTML.
 - **Modo claro/oscuro** y **selector de idioma español/inglés**, ambos en caliente.
+- **Paneles redimensionables**: arrastra los divisores entre buscador, tabla y detalle.
 - Integraciones ya incluidas: LinkedIn, Wellfound, Work With Indies, Hitmarker, Creativepool, InfoJobs, Glassdoor, ArtStation, RemoteOK API y Remotive API.
 
 ## Instalación
@@ -38,6 +40,7 @@ El `.exe` queda en `dist/OPentowork_app.exe`.
 ## Dónde se guardan tus datos
 
 - Configuración: `%APPDATA%\OPentowork_app\config.json`
+- Favoritos, aplicados, descartados y notas: `%APPDATA%\OPentowork_app\job_states.json`
 - Resultados exportados: `%APPDATA%\OPentowork_app\results\`
 - Logs: `%APPDATA%\OPentowork_app\logs\opentowork_app.log`
 
