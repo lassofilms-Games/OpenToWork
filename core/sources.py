@@ -115,6 +115,18 @@ def make_search_links(roles, locations, sources, profile_keywords=None, source_d
     return jobs
 
 
+def _matches_role_terms(text, role_terms):
+    # Frase completa del rol, o alguna de sus palabras como palabra entera
+    # (con \b para que "ai" no coincida dentro de "email" o "available").
+    for term in role_terms:
+        if term in text:
+            return True
+        for word in term.split():
+            if re.search(r"\b" + re.escape(word) + r"\b", text):
+                return True
+    return False
+
+
 def fetch_remoteok(roles, profile_keywords=None, limit=40, lang="es"):
     results = []
     url = "https://remoteok.com/api"
@@ -132,7 +144,7 @@ def fetch_remoteok(roles, profile_keywords=None, limit=40, lang="es"):
         desc = normalize_text(item.get("description"))
         tags = " ".join(item.get("tags") or [])
         text = f"{title} {company} {desc} {tags}".lower()
-        if not any(term in text or any(w in text for w in term.split()) for term in role_terms):
+        if not _matches_role_terms(text, role_terms):
             continue
         loc = normalize_text(item.get("location") or "Remote")
         apply = item.get("url") or f"https://remoteok.com/remote-jobs/{item.get('id','')}"
@@ -173,7 +185,7 @@ def fetch_remotive(roles, profile_keywords=None, limit=40, lang="es"):
             company = normalize_text(item.get("company_name"))
             desc = normalize_text(re.sub(r"<[^>]+>", " ", item.get("description") or ""))
             text = f"{title} {company} {desc}".lower()
-            if not any(term in text or any(w in text for w in term.split()) for term in role_terms):
+            if not _matches_role_terms(text, role_terms):
                 continue
             loc = normalize_text(item.get("candidate_required_location") or "Remote")
             apply = item.get("url") or ""
@@ -210,4 +222,5 @@ def dedupe_jobs(jobs):
         key = (j.get("title","" ).lower(), j.get("company","").lower(), j.get("apply_url","").lower())
         if key not in seen:
             seen.add(key); out.append(j)
-    return sorted(out, key=lambda x: (x.get("type") == "api_result", x.get("match", 0), str(x.get("published_date",""))), reverse=True)
+    # El match (relevancia respecto al rol) manda; el tipo de resultado solo desempata.
+    return sorted(out, key=lambda x: (x.get("match", 0), x.get("type") == "api_result", str(x.get("published_date",""))), reverse=True)
