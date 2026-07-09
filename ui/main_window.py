@@ -256,12 +256,12 @@ class MainWindow(ctk.CTk):
 
     def _build_roles_section(self, parent):
         self.roles_section_label = self._section_label(parent, self.t("section_roles"))
-        self.roles_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        self.roles_frame = ctk.CTkFrame(parent, fg_color="transparent", height=0)
         self.roles_frame.pack(fill="x")
         for r in DEFAULT_ROLES:
             self.create_role_row(r, enabled=True)
 
-        add_row = ctk.CTkFrame(parent, fg_color="transparent")
+        add_row = ctk.CTkFrame(parent, fg_color="transparent", height=0)
         add_row.pack(fill="x", pady=(4, 0))
         self.new_role_entry = ctk.CTkEntry(add_row, placeholder_text=self.t("new_role_placeholder"))
         self.new_role_entry.pack(side="left", fill="x", expand=True)
@@ -274,12 +274,12 @@ class MainWindow(ctk.CTk):
 
     def _build_location_section(self, parent):
         self.location_section_label = self._section_label(parent, self.t("section_location"))
-        self.locations_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        self.locations_frame = ctk.CTkFrame(parent, fg_color="transparent", height=0)
         self.locations_frame.pack(fill="x")
         for loc in DEFAULT_LOCATIONS:
             self.create_location_row(loc, enabled=True)
 
-        add_row = ctk.CTkFrame(parent, fg_color="transparent")
+        add_row = ctk.CTkFrame(parent, fg_color="transparent", height=0)
         add_row.pack(fill="x", pady=(4, 0))
         self.custom_location_entry = ctk.CTkEntry(add_row, placeholder_text=self.t("new_location_placeholder"))
         self.custom_location_entry.pack(side="left", fill="x", expand=True)
@@ -292,7 +292,7 @@ class MainWindow(ctk.CTk):
 
     def _build_sources_section(self, parent):
         self.sources_section_label = self._section_label(parent, self.t("section_sources"))
-        self.sources_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        self.sources_frame = ctk.CTkFrame(parent, fg_color="transparent", height=0)
         self.sources_frame.pack(fill="x")
         for src, enabled in DEFAULT_SOURCES.items():
             self.create_source_row(src, enabled=enabled)
@@ -306,7 +306,7 @@ class MainWindow(ctk.CTk):
             wraplength=theme.SIDEBAR_WIDTH - 80, justify="left",
         )
         self.custom_sources_hint_label.pack(fill="x")
-        self.custom_sources_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        self.custom_sources_frame = ctk.CTkFrame(parent, fg_color="transparent", height=0)
         self.custom_sources_frame.pack(fill="x", pady=(4, 0))
 
         self.new_custom_source_name_entry = ctk.CTkEntry(parent, placeholder_text=self.t("new_source_name_placeholder"))
@@ -323,12 +323,12 @@ class MainWindow(ctk.CTk):
 
     def _build_keywords_section(self, parent):
         self.keywords_section_label = self._section_label(parent, self.t("section_keywords"))
-        self.keywords_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        self.keywords_frame = ctk.CTkFrame(parent, fg_color="transparent", height=0)
         self.keywords_frame.pack(fill="x")
         for k, pts in DEFAULT_PROFILE_KEYWORDS.items():
             self.create_keyword_row(k, pts, enabled=True)
 
-        add_row = ctk.CTkFrame(parent, fg_color="transparent")
+        add_row = ctk.CTkFrame(parent, fg_color="transparent", height=0)
         add_row.pack(fill="x", pady=(4, 0))
         self.new_keyword_entry = ctk.CTkEntry(add_row, placeholder_text=self.t("new_keyword_placeholder"))
         self.new_keyword_entry.pack(side="left", fill="x", expand=True)
