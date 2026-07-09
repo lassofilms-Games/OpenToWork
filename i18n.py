@@ -47,8 +47,8 @@ STRINGS = {
         "empty_detail": "Selecciona un resultado para ver el detalle.",
 
         # Detail panel
-        "detail_skills": "Skills: {skills}",
-        "detail_skills_empty": "Skills: -",
+        "detail_skills": "Keywords encontradas en esta oferta: {skills}",
+        "detail_skills_empty": "Keywords encontradas en esta oferta: ninguna",
         "detail_subtitle": "{company}  ·  {location}  ·  {source}\nPublicado: {published}   ·   Detectado: {detected}",
         "not_available": "No disponible",
         "future_favorite": "⭐ Favorito",
@@ -181,8 +181,8 @@ STRINGS = {
         "empty_detail": "Select a result to see its detail.",
 
         # Detail panel
-        "detail_skills": "Skills: {skills}",
-        "detail_skills_empty": "Skills: -",
+        "detail_skills": "Keywords found in this offer: {skills}",
+        "detail_skills_empty": "Keywords found in this offer: none",
         "detail_subtitle": "{company}  ·  {location}  ·  {source}\nPublished: {published}   ·   Detected: {detected}",
         "not_available": "Not available",
         "future_favorite": "⭐ Favorite",

@@ -1,5 +1,6 @@
 import json
 import queue
+import re
 import threading
 import webbrowser
 import tkinter as tk
@@ -808,12 +809,48 @@ class MainWindow(ctk.CTk):
                 published=job.get("published_date") or self.t("not_available"), detected=job.get("detected_date", "-"),
             )
         )
-        skills = job.get("skills_found", "")
-        self.detail_skills_label.configure(text=self.t("detail_skills", skills=skills) if skills else self.t("detail_skills_empty"))
+        # Solo las keywords del usuario, sin los marcadores internos del scoring
+        # (role_title:..., penalty:..., exclude:...), y con sus puntos de match.
+        internal_markers = ("role_title", "role_text", "penalty:", "exclude:")
+        found_keywords = [
+            s.strip() for s in (job.get("skills_found") or "").split(",")
+            if s.strip() and not s.strip().startswith(internal_markers)
+        ]
+        if found_keywords:
+            labeled = []
+            for kw in found_keywords:
+                pts = self._keyword_points(kw) if kw in self.keyword_vars else None
+                labeled.append(f"{kw} (+{pts})" if pts else kw)
+            self.detail_skills_label.configure(text=self.t("detail_skills", skills=", ".join(labeled)))
+        else:
+            self.detail_skills_label.configure(text=self.t("detail_skills_empty"))
+
+        description = job.get("description") or "-"
         self.detail_description_box.configure(state="normal")
         self.detail_description_box.delete("1.0", "end")
-        self.detail_description_box.insert("1.0", job.get("description") or "-")
+        self.detail_description_box.insert("1.0", description)
+        self._highlight_keywords_in_description(description, found_keywords)
         self.detail_description_box.configure(state="disabled")
+
+    def _highlight_keywords_in_description(self, description, keywords):
+        # Enlace visual keywords <-> oferta: resalta en verde las apariciones
+        # de las keywords encontradas dentro de la descripción.
+        box = self.detail_description_box
+        idx = self._dark_mode_index()
+        try:
+            box.tag_config("kw_hit", foreground=theme.MATCH_HIGH[idx])
+        except Exception:
+            return
+        low = description.lower()
+        for kw in keywords:
+            kw_l = kw.lower()
+            spans = [(m.start(), m.end()) for m in re.finditer(r"\b" + re.escape(kw_l) + r"\b", low)]
+            if not spans:
+                # La keyword coincidió con sus palabras sueltas: resaltarlas una a una.
+                for word in kw_l.split():
+                    spans += [(m.start(), m.end()) for m in re.finditer(r"\b" + re.escape(word) + r"\b", low)]
+            for start, end in spans:
+                box.tag_add("kw_hit", f"1.0+{start}c", f"1.0+{end}c")
 
     def populate_tree(self, jobs):
         self.displayed_jobs = list(jobs)

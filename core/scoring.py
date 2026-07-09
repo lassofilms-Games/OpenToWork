@@ -38,6 +38,14 @@ def all_words_match(text, phrase):
     return bool(words) and all(re.search(r"\b" + re.escape(w) + r"\b", text) for w in words)
 
 
+def phrase_in_text(text, phrase):
+    # Frase presente como palabras enteras ("ai" no coincide dentro de "email").
+    phrase = (phrase or "").strip()
+    if not phrase:
+        return False
+    return bool(re.search(r"\b" + re.escape(phrase) + r"\b", text))
+
+
 def score_job(title, description, company, location, profile_keywords=None, active_roles=None, is_search_link=False):
     text = f"{title} {description} {company} {location}".lower()
     title_l = (title or "").lower()
@@ -68,11 +76,11 @@ def score_job(title, description, company, location, profile_keywords=None, acti
             found.append(f"role_text_words:{role_l}")
             role_hit = True
     for k, pts in profile_keywords.items():
-        if k in text:
+        if phrase_in_text(text, k) or all_words_match(text, k):
             score += pts
             found.append(k)
     for bad in EXCLUDE_KEYWORDS:
-        if bad in text:
+        if phrase_in_text(text, bad):
             score -= 35
             found.append(f"exclude:{bad}")
     if active_roles and not role_hit and not is_search_link:
