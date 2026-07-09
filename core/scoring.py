@@ -31,6 +31,13 @@ def normalize_text(s):
     return re.sub(r"\s+", " ", (s or "")).strip()
 
 
+def all_words_match(text, phrase):
+    # Todas las palabras de la frase presentes como palabras enteras,
+    # en cualquier orden ("ai creative director" cuenta para "creative ai").
+    words = phrase.split()
+    return bool(words) and all(re.search(r"\b" + re.escape(w) + r"\b", text) for w in words)
+
+
 def score_job(title, description, company, location, profile_keywords=None, active_roles=None, is_search_link=False):
     text = f"{title} {description} {company} {location}".lower()
     title_l = (title or "").lower()
@@ -42,13 +49,23 @@ def score_job(title, description, company, location, profile_keywords=None, acti
     role_hit = False
     for role in active_roles:
         role_l = role.lower()
-        if role_l and role_l in title_l:
+        if not role_l:
+            continue
+        if role_l in title_l:
             score += 50
             found.append(f"role_title:{role_l}")
             role_hit = True
-        elif role_l and role_l in text:
+        elif all_words_match(title_l, role_l):
+            score += 40
+            found.append(f"role_title_words:{role_l}")
+            role_hit = True
+        elif role_l in text:
             score += 25
             found.append(f"role_text:{role_l}")
+            role_hit = True
+        elif all_words_match(text, role_l):
+            score += 15
+            found.append(f"role_text_words:{role_l}")
             role_hit = True
     for k, pts in profile_keywords.items():
         if k in text:

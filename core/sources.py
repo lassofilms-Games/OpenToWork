@@ -3,7 +3,7 @@ import urllib.parse
 from datetime import datetime
 
 from constants import APP_NAME, APP_VERSION
-from core.scoring import normalize_text, score_job
+from core.scoring import normalize_text, score_job, all_words_match
 from i18n import t
 
 try:
@@ -116,14 +116,12 @@ def make_search_links(roles, locations, sources, profile_keywords=None, source_d
 
 
 def _matches_role_terms(text, role_terms):
-    # Frase completa del rol, o alguna de sus palabras como palabra entera
-    # (con \b para que "ai" no coincida dentro de "email" o "available").
+    # Relacionado al rol = frase completa, o TODAS sus palabras como
+    # palabras enteras en cualquier orden. Lo que no cumple esto no
+    # le interesa al usuario y se descarta directamente.
     for term in role_terms:
-        if term in text:
+        if term in text or all_words_match(text, term):
             return True
-        for word in term.split():
-            if re.search(r"\b" + re.escape(word) + r"\b", text):
-                return True
     return False
 
 
