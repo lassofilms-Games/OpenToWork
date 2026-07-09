@@ -57,10 +57,35 @@ class MainWindow(ctk.CTk):
 
         self._build_layout()
         self.load_config()
+        self.after(60, self._set_titlebar_color)
 
     def _set_icon(self):
         try:
             self.iconbitmap(str(theme.ICON_PATH))
+        except Exception:
+            pass
+
+    def _set_titlebar_color(self):
+        # La barra de título nativa de Windows se pinta azulada por defecto y
+        # desentona con el header blanco; DWM permite igualarla al tema actual.
+        # (Solo Windows 11; en otros sistemas falla en silencio y no pasa nada.)
+        try:
+            import ctypes
+
+            def colorref(hex_color):
+                value = hex_color.lstrip("#")
+                r, g, b = int(value[0:2], 16), int(value[2:4], 16), int(value[4:6], 16)
+                return (b << 16) | (g << 8) | r
+
+            idx = self._dark_mode_index()
+            caption = colorref((theme.WHITE, theme.GRAY_DARK)[idx])
+            text = colorref(("#1A1A1A", "#E8E8EA")[idx])
+            hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
+            DWMWA_CAPTION_COLOR, DWMWA_TEXT_COLOR = 35, 36
+            for attr, value in ((DWMWA_CAPTION_COLOR, caption), (DWMWA_TEXT_COLOR, text)):
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                    hwnd, attr, ctypes.byref(ctypes.c_int(value)), 4
+                )
         except Exception:
             pass
 
@@ -131,6 +156,7 @@ class MainWindow(ctk.CTk):
             self.theme_button.configure(text="🌙")
         self._setup_treeview_style()
         self._update_paned_colors()
+        self._set_titlebar_color()
         self._render_detail(self.selected_job)
 
     def _toggle_language(self):
