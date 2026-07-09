@@ -203,11 +203,13 @@ class MainWindow(ctk.CTk):
         scroll.pack(fill="both", expand=True, padx=16)
         self.sidebar_scroll = scroll
 
+        # Orden por función: qué buscas (rol + keywords que afinan el match),
+        # dónde (ubicación) y desde qué portales (fuentes).
         self._build_roles_section(scroll)
+        self._build_keywords_section(scroll)
         self._build_location_section(scroll)
         self._build_sources_section(scroll)
         self._build_custom_sources_section(scroll)
-        self._build_keywords_section(scroll)
 
         actions = ctk.CTkFrame(sidebar, fg_color="transparent")
         actions.pack(fill="x", padx=16, pady=(4, 16))
