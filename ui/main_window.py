@@ -66,20 +66,29 @@ class MainWindow(ctk.CTk):
         return t(self.language, key, **kwargs)
 
     def _build_layout(self):
-        self.grid_columnconfigure(0, weight=0)
-        self.grid_columnconfigure(1, weight=1)
+        self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
         self._build_header()
+        # Divisores arrastrables: el usuario puede achicar/agrandar el panel de
+        # búsqueda y el de detalle; los minsize evitan textos ilegibles.
+        self.h_paned = tk.PanedWindow(self, orient="horizontal", sashwidth=6, bd=0, relief="flat")
+        self.h_paned.grid(row=1, column=0, sticky="nsew")
         self._build_sidebar()
         self._build_main_area()
         self._build_status_bar()
+        self._update_paned_colors()
+
+    def _update_paned_colors(self):
+        idx = self._dark_mode_index()
+        for paned in (self.h_paned, self.v_paned):
+            paned.configure(bg=theme.WINDOW_BG[idx])
 
     # ---------- Header ----------
 
     def _build_header(self):
         header = ctk.CTkFrame(self, height=theme.HEADER_HEIGHT, corner_radius=0, fg_color=(theme.WHITE, theme.GRAY_DARK))
-        header.grid(row=0, column=0, columnspan=2, sticky="ew")
+        header.grid(row=0, column=0, sticky="ew")
         header.grid_propagate(False)
         header.grid_columnconfigure(1, weight=1)
 
@@ -119,6 +128,7 @@ class MainWindow(ctk.CTk):
             ctk.set_appearance_mode("light")
             self.theme_button.configure(text="🌙")
         self._setup_treeview_style()
+        self._update_paned_colors()
         self._render_detail(self.selected_job)
 
     def _toggle_language(self):
@@ -178,9 +188,10 @@ class MainWindow(ctk.CTk):
     # ---------- Sidebar ----------
 
     def _build_sidebar(self):
-        sidebar = ctk.CTkFrame(self, width=theme.SIDEBAR_WIDTH, corner_radius=0)
-        sidebar.grid(row=1, column=0, sticky="ns")
-        sidebar.grid_propagate(False)
+        sidebar = ctk.CTkFrame(self.h_paned, corner_radius=0)
+        self.sidebar_frame = sidebar
+        self.h_paned.add(sidebar, width=theme.SIDEBAR_WIDTH, minsize=theme.SIDEBAR_MIN_WIDTH, stretch="never")
+        sidebar.bind("<Configure>", self._on_sidebar_resize)
 
         self.search_button = ctk.CTkButton(
             sidebar, text=self.t("search_button"), height=42, font=theme.FONT_SECTION,
@@ -212,6 +223,14 @@ class MainWindow(ctk.CTk):
             command=self.save_config, anchor="w",
         )
         self.save_button.pack(fill="x")
+
+    def _on_sidebar_resize(self, event=None):
+        # Reajusta el ancho de línea de los textos que envuelven, para que
+        # sigan leyéndose completos al achicar/agrandar el panel.
+        if not hasattr(self, "custom_sources_hint_label"):
+            return
+        wrap = max(130, self.sidebar_frame.winfo_width() - 80)
+        self.custom_sources_hint_label.configure(wraplength=wrap)
 
     def _section_label(self, parent, text):
         label = ctk.CTkLabel(parent, text=text, font=theme.FONT_SECTION, anchor="w")
@@ -277,7 +296,7 @@ class MainWindow(ctk.CTk):
         self.custom_sources_hint_label = ctk.CTkLabel(
             parent, text=self.t("section_custom_sources_hint"),
             font=theme.FONT_SMALL, text_color=theme.TEXT_MUTED, anchor="w",
-            wraplength=theme.SIDEBAR_WIDTH - 32, justify="left",
+            wraplength=theme.SIDEBAR_WIDTH - 80, justify="left",
         )
         self.custom_sources_hint_label.pack(fill="x")
         self.custom_sources_frame = ctk.CTkFrame(parent, fg_color="transparent")
@@ -644,13 +663,11 @@ class MainWindow(ctk.CTk):
             self.tree.tag_configure("match_low", foreground=theme.MATCH_LOW[idx])
 
     def _build_main_area(self):
-        main_area = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
-        main_area.grid(row=1, column=1, sticky="nsew", padx=16, pady=12)
-        main_area.grid_rowconfigure(0, weight=1)
-        main_area.grid_columnconfigure(0, weight=1)
+        self.v_paned = tk.PanedWindow(self.h_paned, orient="vertical", sashwidth=6, bd=0, relief="flat")
+        self.h_paned.add(self.v_paned, minsize=theme.MAIN_AREA_MIN_WIDTH, stretch="always")
 
-        self.table_frame = ctk.CTkFrame(main_area, corner_radius=10)
-        self.table_frame.grid(row=0, column=0, sticky="nsew")
+        self.table_frame = ctk.CTkFrame(self.v_paned, corner_radius=10)
+        self.v_paned.add(self.table_frame, minsize=theme.TABLE_MIN_HEIGHT, stretch="always", padx=12, pady=8)
         self.table_frame.grid_rowconfigure(0, weight=1)
         self.table_frame.grid_columnconfigure(0, weight=1)
 
@@ -680,12 +697,14 @@ class MainWindow(ctk.CTk):
         )
         self.empty_state_label.place(relx=0.5, rely=0.5, anchor="center")
 
-        self._build_detail_panel(main_area)
+        self._build_detail_panel()
 
-    def _build_detail_panel(self, main_area):
-        self.detail_frame = ctk.CTkFrame(main_area, corner_radius=10, height=220)
-        self.detail_frame.grid(row=1, column=0, sticky="ew", pady=(12, 0))
-        self.detail_frame.grid_propagate(False)
+    def _build_detail_panel(self):
+        self.detail_frame = ctk.CTkFrame(self.v_paned, corner_radius=10)
+        self.v_paned.add(
+            self.detail_frame, height=theme.DETAIL_HEIGHT, minsize=theme.DETAIL_MIN_HEIGHT,
+            stretch="never", padx=12, pady=8,
+        )
         self.detail_frame.grid_rowconfigure(0, weight=1)
         self.detail_frame.grid_columnconfigure(0, weight=1)
 
@@ -870,7 +889,7 @@ class MainWindow(ctk.CTk):
 
     def _build_status_bar(self):
         status_bar = ctk.CTkFrame(self, height=theme.STATUSBAR_HEIGHT, corner_radius=0, fg_color=(theme.GRAY_LIGHT, theme.GRAY_DARK))
-        status_bar.grid(row=2, column=0, columnspan=2, sticky="ew")
+        status_bar.grid(row=2, column=0, sticky="ew")
         status_bar.grid_propagate(False)
         self.status_label = ctk.CTkLabel(status_bar, text=self.t("status_ready"), font=theme.FONT_SMALL, text_color=theme.TEXT_MUTED)
         self.status_label.pack(side="left", padx=12)
