@@ -123,15 +123,28 @@ class MainWindow(ctk.CTk):
         # El bg se fija ya en la creación: las tarjetas CTk capturan el color
         # del padre al construirse para dibujar sus esquinas redondeadas, y si
         # el paned aún tuviera el gris de sistema aparecerían picos claros.
+        # opaqueresize=False: durante el arrastre solo se mueve una línea guía
+        # y el contenido se reorganiza una única vez al soltar. Con el valor por
+        # defecto (True) cada pixel de arrastre relanza el layout de todo el
+        # árbol CTk y aparecen artefactos (textos cortados, tearing).
         self.h_paned = tk.PanedWindow(
             self, orient="horizontal", sashwidth=6, bd=0, relief="flat",
-            bg=theme.WINDOW_BG[self._dark_mode_index()],
+            bg=theme.WINDOW_BG[self._dark_mode_index()], opaqueresize=False,
         )
+        self._style_paned_proxy(self.h_paned)
         self.h_paned.grid(row=1, column=0, sticky="nsew")
         self._build_sidebar()
         self._build_main_area()
         self._build_status_bar()
         self._update_paned_colors()
+
+    def _style_paned_proxy(self, paned):
+        # Línea guía verde durante el arrastre del divisor (Tk >= 8.6.6);
+        # si la opción no existe se usa la guía por defecto del sistema.
+        try:
+            paned.configure(proxybackground=theme.GREEN, proxyborderwidth=0, proxyrelief="flat")
+        except tk.TclError:
+            pass
 
     def _update_paned_colors(self):
         idx = self._dark_mode_index()
@@ -777,8 +790,9 @@ class MainWindow(ctk.CTk):
     def _build_main_area(self):
         self.v_paned = tk.PanedWindow(
             self.h_paned, orient="vertical", sashwidth=6, bd=0, relief="flat",
-            bg=theme.WINDOW_BG[self._dark_mode_index()],
+            bg=theme.WINDOW_BG[self._dark_mode_index()], opaqueresize=False,
         )
+        self._style_paned_proxy(self.v_paned)
         self.h_paned.add(self.v_paned, minsize=theme.MAIN_AREA_MIN_WIDTH, stretch="always")
 
         # bg_color explícito: el padre es tk.PanedWindow, así que CTk no puede
