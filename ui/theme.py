@@ -5,7 +5,7 @@ LOGO_PATH = ASSETS_DIR / "logo_trimmed.png"
 ICON_PATH = ASSETS_DIR / "icon.ico"
 
 # =============================================================================
-# DESIGN SYSTEM — OPentowork_app
+# DESIGN SYSTEM — OpenToWork
 # Todos los valores de color/tipografía/espaciado/radio de la UI viven aquí.
 # Los widgets no-CTk (ttk.Treeview, tk.PanedWindow) no siguen el modo de
 # apariencia automáticamente, por eso casi todo se define como par
@@ -38,7 +38,7 @@ TEXT_MUTED = ("#5B5B60", "#9B9BA1")        # alias retrocompatible de TEXT_SECON
 TEXT_DISABLED = ("#B4B5BB", "#5A5B60")
 
 # ---------------------------------------------------------------------------
-# Color · marca (verde OPENTOWORK, se conserva)
+# Color · marca (verde OpenToWork, se conserva)
 # ---------------------------------------------------------------------------
 GREEN = "#008600"
 GREEN_HOVER = "#046B08"

@@ -1,4 +1,4 @@
-OPentowork_app v1.3.0
+OpenToWork v1.4.0
 Creado por Diego Lasso
 
 What it is
@@ -16,14 +16,16 @@ Run from Python
 
 Build the EXE
 - Run:
-  python -m PyInstaller OPentowork_app.spec --noconfirm
+  python -m PyInstaller OpenToWork.spec --noconfirm
 - Or use:
-  build_exe_opentowork_app.bat
+  build_exe_opentowork.bat
 
 Where files are saved
-- Configuration: %APPDATA%\OPentowork_app\config.json
-- Results: %APPDATA%\OPentowork_app\results\
-- Logs: %APPDATA%\OPentowork_app\logs\opentowork_app.log
+- Configuration: %APPDATA%\OpenToWork\config.json
+- Job states (favorites, applied, discarded, notes): %APPDATA%\OpenToWork\job_states.json
+- Results: %APPDATA%\OpenToWork\results\
+- Logs: %APPDATA%\OpenToWork\logs\opentowork.log
+- Coming from OPentowork_app? Your config and job states migrate automatically on first run.
 
 How to use
 1. Choose roles, keywords, locations and sources in the sidebar.

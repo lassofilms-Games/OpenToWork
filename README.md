@@ -1,8 +1,8 @@
-# OPentowork_app
+# OpenToWork
 
 Aplicación de escritorio en Python (CustomTkinter) para buscar ofertas de empleo combinando enlaces de búsqueda directos y APIs públicas, con un sistema de match por keywords y roles.
 
-![OPentowork_app screenshot](docs/screenshot.png)
+![OpenToWork screenshot](docs/screenshot.png)
 
 ## Características
 
@@ -10,7 +10,7 @@ Aplicación de escritorio en Python (CustomTkinter) para buscar ofertas de emple
 - **Fuentes personalizadas**: añade cualquier portal de empleo por nombre + dominio, sin tocar código.
 - **Tabla de resultados** con color por tipo (oferta real vs. enlace de búsqueda) y por score de match.
 - **Panel de detalle** con descripción (keywords resaltadas), y accesos directos para abrir el enlace o el fallback de Google.
-- **Seguimiento por oferta**: marca ⭐ Favorito, ✔ Aplicado o ✕ Descartado y escribe notas propias — persiste entre sesiones y se ve de un vistazo en la columna Estado.
+- **Seguimiento por oferta**: marca ★ Favorito, ✓ Aplicado o ✕ Descartado y escribe notas propias — persiste entre sesiones y se ve de un vistazo en la columna Estado.
 - **Exportación** a TXT, CSV y HTML.
 - **Modo claro/oscuro** y **selector de idioma español/inglés**, ambos en caliente.
 - **Paneles redimensionables**: arrastra los divisores entre buscador, tabla y detalle.
@@ -26,23 +26,26 @@ python opentowork_app.py
 ## Generar el ejecutable (.exe)
 
 ```bash
-python -m PyInstaller OPentowork_app.spec --noconfirm
+python -m PyInstaller OpenToWork.spec --noconfirm
 ```
 
 o usando el script incluido:
 
 ```bash
-build_exe_opentowork_app.bat
+build_exe_opentowork.bat
 ```
 
-El `.exe` queda en `dist/OPentowork_app.exe`.
+El `.exe` queda en `dist/OpenToWork.exe`.
 
 ## Dónde se guardan tus datos
 
-- Configuración: `%APPDATA%\OPentowork_app\config.json`
-- Favoritos, aplicados, descartados y notas: `%APPDATA%\OPentowork_app\job_states.json`
-- Resultados exportados: `%APPDATA%\OPentowork_app\results\`
-- Logs: `%APPDATA%\OPentowork_app\logs\opentowork_app.log`
+- Configuración: `%APPDATA%\OpenToWork\config.json`
+- Favoritos, aplicados, descartados y notas: `%APPDATA%\OpenToWork\job_states.json`
+- Resultados exportados: `%APPDATA%\OpenToWork\results\`
+- Logs: `%APPDATA%\OpenToWork\logs\opentowork.log`
+
+Si vienes de una versión anterior (`OPentowork_app`), la configuración y tus
+estados por oferta se migran automáticamente al primer arranque.
 
 ## Estructura del proyecto
 
