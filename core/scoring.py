@@ -1,4 +1,5 @@
 import re
+from datetime import datetime
 
 DEFAULT_PROFILE_KEYWORDS = {
     "comfyui": 20,
@@ -29,6 +30,26 @@ EXCLUDE_KEYWORDS = [
 
 def normalize_text(s):
     return re.sub(r"\s+", " ", (s or "")).strip()
+
+
+def freshness_bonus(published, now=None):
+    """Prima la actualidad de la oferta: +10 si tiene una semana o menos,
+    0 hasta 30 días, -10 si es más antigua. Fechas ilegibles no puntúan."""
+    try:
+        if isinstance(published, (int, float)):
+            dt = datetime.fromtimestamp(published)
+        else:
+            dt = datetime.fromisoformat(str(published)[:10])
+    except (ValueError, OSError, OverflowError):
+        return 0
+    age_days = ((now or datetime.now()) - dt).days
+    if age_days < 0:
+        return 0
+    if age_days <= 7:
+        return 10
+    if age_days <= 30:
+        return 0
+    return -10
 
 
 def all_words_match(text, phrase):

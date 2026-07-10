@@ -1,10 +1,28 @@
 import re
+import time
 import urllib.parse
 from datetime import datetime
 
 from constants import APP_NAME, APP_VERSION
-from core.scoring import normalize_text, score_job, all_words_match
+from core.scoring import normalize_text, score_job, all_words_match, freshness_bonus
 from i18n import t
+
+# Caché en memoria de las respuestas de las APIs: RemoteOK devuelve su feed
+# completo en cada llamada y Remotive consulta una URL por rol; repetir una
+# búsqueda a los pocos minutos no debería volver a descargarlo todo.
+_CACHE_TTL_SECONDS = 15 * 60
+_api_cache = {}
+
+
+def _cache_get(key):
+    entry = _api_cache.get(key)
+    if entry and (time.time() - entry[0]) < _CACHE_TTL_SECONDS:
+        return entry[1]
+    return None
+
+
+def _cache_set(key, value):
+    _api_cache[key] = (time.time(), value)
 
 try:
     import requests
@@ -96,9 +114,11 @@ def make_search_links(roles, locations, sources, profile_keywords=None, source_d
                 google = build_google_url(role, loc, domain) if domain else direct
                 title = t(lang, "search_link_title", role=role)
                 desc = t(lang, "search_link_description", src=src, role=role, loc=loc)
-                score, found = score_job(title, desc, src, loc, profile_keywords, roles, is_search_link=True)
+                # Los enlaces de búsqueda no se puntúan: no son ofertas y su
+                # propia descripción contiene el rol, lo que inflaba el match
+                # a 100% y enterraba a las ofertas reales.
                 jobs.append({
-                    "match": score,
+                    "match": 0,
                     "title": title,
                     "company": "-",
                     "location": loc,
@@ -109,7 +129,7 @@ def make_search_links(roles, locations, sources, profile_keywords=None, source_d
                     "apply_url": direct,
                     "fallback_url": google,
                     "description": desc,
-                    "skills_found": ", ".join(found),
+                    "skills_found": "",
                     "type": "search_link"
                 })
     return jobs
@@ -127,13 +147,16 @@ def _matches_role_terms(text, role_terms):
 
 def fetch_remoteok(roles, profile_keywords=None, limit=40, lang="es"):
     results = []
-    url = "https://remoteok.com/api"
-    headers = {"User-Agent": f"{APP_NAME}/{APP_VERSION}"}
-    response = _handle_requests_call("RemoteOK API", url, headers=headers)
-    try:
-        data = response.json()
-    except ValueError as error:
-        raise SourceFetchError("RemoteOK API", "invalid_response", "RemoteOK API: la respuesta JSON no es valida.") from error
+    data = _cache_get("remoteok")
+    if data is None:
+        url = "https://remoteok.com/api"
+        headers = {"User-Agent": f"{APP_NAME}/{APP_VERSION}"}
+        response = _handle_requests_call("RemoteOK API", url, headers=headers)
+        try:
+            data = response.json()
+        except ValueError as error:
+            raise SourceFetchError("RemoteOK API", "invalid_response", "RemoteOK API: la respuesta JSON no es valida.") from error
+        _cache_set("remoteok", data)
     role_terms = [x.lower() for x in roles]
     not_available = t(lang, "not_available")
     for item in data[1:]:
@@ -148,6 +171,7 @@ def fetch_remoteok(roles, profile_keywords=None, limit=40, lang="es"):
         apply = item.get("url") or f"https://remoteok.com/remote-jobs/{item.get('id','')}"
         raw_published = item.get("date") or item.get("epoch")
         score, found = score_job(title, desc + " " + tags, company, loc, profile_keywords, roles)
+        score = max(0, min(100, score + freshness_bonus(raw_published)))
         results.append({
             "match": score,
             "title": title,
@@ -171,13 +195,16 @@ def fetch_remotive(roles, profile_keywords=None, limit=40, lang="es"):
     role_terms = [x.lower() for x in roles]
     not_available = t(lang, "not_available")
     for role in roles[:8]:
-        q = urllib.parse.quote_plus(role)
-        url = f"https://remotive.com/api/remote-jobs?search={q}"
-        response = _handle_requests_call("Remotive API", url)
-        try:
-            data = response.json().get("jobs", [])
-        except ValueError as error:
-            raise SourceFetchError("Remotive API", "invalid_response", "Remotive API: la respuesta JSON no es valida.") from error
+        data = _cache_get(("remotive", role.lower()))
+        if data is None:
+            q = urllib.parse.quote_plus(role)
+            url = f"https://remotive.com/api/remote-jobs?search={q}"
+            response = _handle_requests_call("Remotive API", url)
+            try:
+                data = response.json().get("jobs", [])
+            except ValueError as error:
+                raise SourceFetchError("Remotive API", "invalid_response", "Remotive API: la respuesta JSON no es valida.") from error
+            _cache_set(("remotive", role.lower()), data)
         for item in data:
             title = normalize_text(item.get("title"))
             company = normalize_text(item.get("company_name"))
@@ -189,6 +216,7 @@ def fetch_remotive(roles, profile_keywords=None, limit=40, lang="es"):
             apply = item.get("url") or ""
             raw_published = item.get("publication_date")
             score, found = score_job(title, desc, company, loc, profile_keywords, roles)
+            score = max(0, min(100, score + freshness_bonus(raw_published)))
             results.append({
                 "match": score,
                 "title": title,
@@ -220,5 +248,10 @@ def dedupe_jobs(jobs):
         key = (j.get("title","" ).lower(), j.get("company","").lower(), j.get("apply_url","").lower())
         if key not in seen:
             seen.add(key); out.append(j)
-    # El match (relevancia respecto al rol) manda; el tipo de resultado solo desempata.
-    return sorted(out, key=lambda x: (x.get("match", 0), x.get("type") == "api_result", str(x.get("published_date",""))), reverse=True)
+    # Las ofertas reales siempre por delante de los enlaces de búsqueda;
+    # dentro de cada grupo manda el match y luego la fecha de publicación.
+    return sorted(
+        out,
+        key=lambda x: (x.get("type") == "api_result", x.get("match", 0), str(x.get("published_date", ""))),
+        reverse=True,
+    )

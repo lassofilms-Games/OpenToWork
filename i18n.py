@@ -3,6 +3,7 @@ STRINGS = {
         # Header
         "quick_filter_placeholder": "Filtro rápido... (Enter para filtrar)",
         "result_count": "{n} resultados",
+        "only_real_offers": "Solo ofertas reales",
 
         # Sidebar sections
         "section_roles": "Roles",
@@ -137,6 +138,7 @@ STRINGS = {
         # Header
         "quick_filter_placeholder": "Quick filter... (Enter to filter)",
         "result_count": "{n} results",
+        "only_real_offers": "Real offers only",
 
         # Sidebar sections
         "section_roles": "Roles",

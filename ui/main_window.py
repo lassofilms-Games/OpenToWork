@@ -52,6 +52,7 @@ class MainWindow(ctk.CTk):
         self.keyword_widgets = {}
         self.search_queue = queue.Queue()
         self.search_in_progress = False
+        self.only_offers_var = tk.BooleanVar(value=False)
         self.search_button = None
         self.export_button = None
         self.save_button = None
@@ -204,6 +205,15 @@ class MainWindow(ctk.CTk):
 
         right = ctk.CTkFrame(header, fg_color="transparent")
         right.grid(row=0, column=2, padx=theme.SPACE_LG, pady=theme.SPACE_SM, sticky="e")
+        # Filtro rápido de señal/ruido: oculta los enlaces de búsqueda y deja
+        # solo las ofertas reales de las APIs.
+        self.only_offers_switch = ctk.CTkSwitch(
+            right, text=self.t("only_real_offers"), variable=self.only_offers_var,
+            onvalue=True, offvalue=False, command=self._on_offers_filter_toggle,
+            font=theme.FONT_SMALL, text_color=theme.TEXT_SECONDARY,
+            progress_color=theme.GREEN, switch_width=36, switch_height=18,
+        )
+        self.only_offers_switch.pack(side="left", padx=(0, theme.SPACE_MD))
         self.result_count_label = ctk.CTkLabel(
             right, text=self.t("result_count", n=0), font=theme.FONT_BODY, text_color=theme.TEXT_SECONDARY,
         )
@@ -240,6 +250,7 @@ class MainWindow(ctk.CTk):
 
     def _apply_language(self):
         self.language_button.configure(text="ES" if self.language == "en" else "EN")
+        self.only_offers_switch.configure(text=self.t("only_real_offers"))
         self.quick_filter_entry.configure(placeholder_text=self.t("quick_filter_placeholder"))
         self.result_count_label.configure(text=self.t("result_count", n=len(self.displayed_jobs)))
         self.search_button.configure(text=self.t("search_button"))
@@ -1081,8 +1092,14 @@ class MainWindow(ctk.CTk):
         )
         match = job.get("match", 0) or 0
         idx = self._dark_mode_index()
-        match_color = theme.MATCH_HIGH[idx] if match >= 70 else theme.MATCH_MID[idx] if match >= 40 else theme.MATCH_LOW[idx]
-        self.detail_match_badge.configure(text=f"{match}%", text_color=match_color, fg_color=theme.SURFACE_SUNKEN)
+        if is_api:
+            match_color = theme.MATCH_HIGH[idx] if match >= 70 else theme.MATCH_MID[idx] if match >= 40 else theme.MATCH_LOW[idx]
+            match_text = f"{match}%"
+        else:
+            # Los enlaces de búsqueda no se puntúan.
+            match_color = theme.TEXT_SECONDARY[idx]
+            match_text = "—"
+        self.detail_match_badge.configure(text=match_text, text_color=match_color, fg_color=theme.SURFACE_SUNKEN)
         self.detail_title_label.configure(text=job.get("title") or "-")
         self.detail_subtitle_label.configure(
             text=self.t(
@@ -1145,11 +1162,15 @@ class MainWindow(ctk.CTk):
         self.displayed_jobs = list(jobs)
         self.tree.delete(*self.tree.get_children())
         for idx, j in enumerate(jobs):
-            job_type = self.t("type_api") if j.get("type") == "api_result" else self.t("type_search")
+            is_api = j.get("type") == "api_result"
+            job_type = self.t("type_api") if is_api else self.t("type_search")
             match = j.get("match", 0) or 0
+            # Los enlaces de búsqueda no tienen match real: mostrar "—" evita
+            # el porcentaje engañoso que los ponía por delante de las ofertas.
+            match_text = f"{match}%" if is_api else "—"
             self.tree.insert("", "end", iid=str(idx), values=(
                 self._state_icons(j),
-                f"{match}%", j.get("title", ""), j.get("company", ""), j.get("location", ""),
+                match_text, j.get("title", ""), j.get("company", ""), j.get("location", ""),
                 j.get("source", ""), j.get("published_date", ""), job_type,
             ), tags=self._row_tags(j))
         self.result_count_label.configure(text=self.t("result_count", n=len(jobs)))
@@ -1203,15 +1224,29 @@ class MainWindow(ctk.CTk):
             return
         messagebox.showwarning(APP_NAME, self.t("no_fallback_available"))
 
+    def _visible_jobs(self):
+        # Vista actual de la tabla: los resultados de la búsqueda pasados por
+        # el switch "Solo ofertas reales" y por el texto del filtro rápido.
+        jobs = self.jobs
+        if self.only_offers_var.get():
+            jobs = [j for j in jobs if j.get("type") == "api_result"]
+        q = self.quick_filter_entry.get().lower().strip()
+        if q:
+            jobs = [j for j in jobs if q in " ".join(str(v) for v in j.values()).lower()]
+        return jobs
+
     def apply_quick_filter(self, event=None):
         q = self.quick_filter_entry.get().lower().strip()
-        if not q:
-            self.populate_tree(self.jobs)
+        visible = self._visible_jobs()
+        self.populate_tree(visible)
+        if q:
+            self.status_label.configure(text=self.t("status_filtered", n=len(visible)))
+        else:
             self.status_label.configure(text=self.t("status_filter_clean"))
-            return
-        filtered = [j for j in self.jobs if q in " ".join(str(v) for v in j.values()).lower()]
-        self.populate_tree(filtered)
-        self.status_label.configure(text=self.t("status_filtered", n=len(filtered)))
+
+    def _on_offers_filter_toggle(self):
+        self.populate_tree(self._visible_jobs())
+        self.save_config(silent=True)
 
     # ---------- Status bar ----------
 
@@ -1293,7 +1328,7 @@ class MainWindow(ctk.CTk):
 
     def _finish_search(self, jobs, errors):
         self.jobs = dedupe_jobs(jobs)
-        self.populate_tree(self.jobs)
+        self.populate_tree(self._visible_jobs())
         self.save_config(silent=True)
         self._set_search_state(False, self.t("status_search_done", n=len(self.jobs)))
         if not self.jobs and errors:
@@ -1392,6 +1427,7 @@ class MainWindow(ctk.CTk):
     def save_config(self, silent=False):
         cfg = {
             "language": self.language,
+            "only_real_offers": self.only_offers_var.get(),
             "roles_list": [{"name": k, "enabled": v.get()} for k, v in self.role_vars.items()],
             "roles": {k: v.get() for k, v in self.role_vars.items()},
             "locations_list": [{"name": k, "enabled": v.get()} for k, v in self.location_vars.items()],
@@ -1434,6 +1470,7 @@ class MainWindow(ctk.CTk):
             if saved_language in ("es", "en") and saved_language != self.language:
                 self.language = saved_language
                 self._apply_language()
+            self.only_offers_var.set(bool(cfg.get("only_real_offers", False)))
             roles_list = cfg.get("roles_list")
             if roles_list is not None:
                 for role in list(self.role_vars.keys()):
