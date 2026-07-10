@@ -1,4 +1,4 @@
-# OpenToWork
+# OpenToWork 
 
 Aplicación de escritorio en Python (CustomTkinter) para buscar ofertas de empleo combinando enlaces de búsqueda directos y APIs públicas, con un sistema de match por keywords y roles.
 
