@@ -13,15 +13,15 @@ STRINGS = {
         "section_keywords": "Keywords / Match",
 
         # Buttons
-        "search_button": "🔍  Buscar ofertas",
+        "search_button": "Buscar ofertas",
         "delete_unchecked": "Eliminar desmarcadas",
         "export_button": "Exportar TXT/CSV/HTML",
         "save_button": "Guardar configuración",
         "add_source_button": "+ Añadir fuente",
         "add_keyword_button": "+ Añadir keyword",
-        "open_link_button": "🔗 Abrir enlace",
+        "open_link_button": "Abrir enlace",
         "open_fallback_button": "Abrir fallback Google",
-        "export_all_button": "📤 Exportar todo",
+        "export_all_button": "Exportar todo",
 
         # Placeholders
         "new_role_placeholder": "Nueva categoría...",
@@ -52,8 +52,8 @@ STRINGS = {
         "detail_subtitle": "{company}  ·  {location}  ·  {source}\nPublicado: {published}   ·   Detectado: {detected}",
         "not_available": "No disponible",
         "col_state": "Estado",
-        "mark_favorite": "⭐ Favorito",
-        "mark_applied": "✔ Aplicado",
+        "mark_favorite": "★ Favorito",
+        "mark_applied": "✓ Aplicado",
         "mark_discarded": "✕ Descartado",
         "notes_placeholder": "Notas de esta oferta... (Enter para guardar)",
 
@@ -147,15 +147,15 @@ STRINGS = {
         "section_keywords": "Keywords / Match",
 
         # Buttons
-        "search_button": "🔍  Search jobs",
+        "search_button": "Search jobs",
         "delete_unchecked": "Delete unchecked",
         "export_button": "Export TXT/CSV/HTML",
         "save_button": "Save configuration",
         "add_source_button": "+ Add source",
         "add_keyword_button": "+ Add keyword",
-        "open_link_button": "🔗 Open link",
+        "open_link_button": "Open link",
         "open_fallback_button": "Open Google fallback",
-        "export_all_button": "📤 Export all",
+        "export_all_button": "Export all",
 
         # Placeholders
         "new_role_placeholder": "New category...",
@@ -186,8 +186,8 @@ STRINGS = {
         "detail_subtitle": "{company}  ·  {location}  ·  {source}\nPublished: {published}   ·   Detected: {detected}",
         "not_available": "Not available",
         "col_state": "Status",
-        "mark_favorite": "⭐ Favorite",
-        "mark_applied": "✔ Applied",
+        "mark_favorite": "★ Favorite",
+        "mark_applied": "✓ Applied",
         "mark_discarded": "✕ Discarded",
         "notes_placeholder": "Notes for this offer... (Enter to save)",
 

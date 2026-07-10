@@ -17,7 +17,7 @@ from core.config_store import RESULTS_DIR, CONFIG_FILE, LEGACY_CONFIG_FILE, find
 from core.job_states import job_key, load_states, save_states
 from core.logging_setup import setup_logging
 from i18n import t
-from ui import theme
+from ui import icons, theme
 
 logger = setup_logging()
 
@@ -26,9 +26,12 @@ class MainWindow(ctk.CTk):
     def __init__(self):
         super().__init__()
         ctk.set_appearance_mode("light")
-        self.title(f"{APP_NAME} v{APP_VERSION}")
+        # Barra de título minimalista: sin texto (el logo del header ya identifica
+        # la app); el icono pequeño se oculta en _hide_titlebar_icon.
+        self.title("")
         self.geometry("1360x800")
         self.minsize(1180, 680)
+        self.configure(fg_color=theme.BG_MAIN)
         self._set_icon()
 
         self.language = "es"
@@ -64,6 +67,23 @@ class MainWindow(ctk.CTk):
             self.iconbitmap(str(theme.ICON_PATH))
         except Exception:
             pass
+        try:
+            from PIL import ImageTk
+
+            # Windows elige el icono por tamaño: 16px para la barra de título,
+            # 32px+ para la barra de tareas y alt-tab. El 16px se pinta del
+            # mismo color que la barra de título (Tk no conserva el alfa al
+            # convertir a HICON), así queda visualmente vacía sin perder el
+            # logo real en la barra de tareas. Se refresca al cambiar de tema.
+            logo = Image.open(theme.LOGO_PATH)
+            caption = theme.BG_MAIN[self._dark_mode_index()]
+            blank = Image.new("RGB", (16, 16), caption)
+            self._icon_images = [ImageTk.PhotoImage(blank)] + [
+                ImageTk.PhotoImage(logo.resize((s, s), Image.LANCZOS)) for s in (32, 48, 256)
+            ]
+            self.iconphoto(False, *self._icon_images)
+        except Exception:
+            pass
 
     def _set_titlebar_color(self):
         # La barra de título nativa de Windows se pinta azulada por defecto y
@@ -78,7 +98,8 @@ class MainWindow(ctk.CTk):
                 return (b << 16) | (g << 8) | r
 
             idx = self._dark_mode_index()
-            caption = colorref((theme.WHITE, theme.GRAY_DARK)[idx])
+            # Mismo gris que el header: barra de título y header forman una sola banda.
+            caption = colorref(theme.BG_MAIN[idx])
             text = colorref(("#1A1A1A", "#E8E8EA")[idx])
             hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
             DWMWA_CAPTION_COLOR, DWMWA_TEXT_COLOR = 35, 36
@@ -99,7 +120,13 @@ class MainWindow(ctk.CTk):
         self._build_header()
         # Divisores arrastrables: el usuario puede achicar/agrandar el panel de
         # búsqueda y el de detalle; los minsize evitan textos ilegibles.
-        self.h_paned = tk.PanedWindow(self, orient="horizontal", sashwidth=6, bd=0, relief="flat")
+        # El bg se fija ya en la creación: las tarjetas CTk capturan el color
+        # del padre al construirse para dibujar sus esquinas redondeadas, y si
+        # el paned aún tuviera el gris de sistema aparecerían picos claros.
+        self.h_paned = tk.PanedWindow(
+            self, orient="horizontal", sashwidth=6, bd=0, relief="flat",
+            bg=theme.WINDOW_BG[self._dark_mode_index()],
+        )
         self.h_paned.grid(row=1, column=0, sticky="nsew")
         self._build_sidebar()
         self._build_main_area()
@@ -114,36 +141,68 @@ class MainWindow(ctk.CTk):
     # ---------- Header ----------
 
     def _build_header(self):
-        header = ctk.CTkFrame(self, height=theme.HEADER_HEIGHT, corner_radius=0, fg_color=(theme.WHITE, theme.GRAY_DARK))
+        # El header comparte fondo con la ventana: así la pestaña de carpeta
+        # (blanca) destaca sobre él y se funde con el panel del sidebar de abajo,
+        # dibujando la silueta de carpeta de Windows arriba a la izquierda.
+        header = ctk.CTkFrame(self, height=theme.HEADER_HEIGHT, corner_radius=0, fg_color=theme.BG_MAIN)
         header.grid(row=0, column=0, sticky="ew")
         header.grid_propagate(False)
         header.grid_columnconfigure(1, weight=1)
 
-        brand = ctk.CTkFrame(header, fg_color="transparent")
-        brand.grid(row=0, column=0, padx=16, pady=8, sticky="w")
-        try:
-            logo_image = ctk.CTkImage(light_image=Image.open(theme.LOGO_PATH), size=(34, 34))
-            ctk.CTkLabel(brand, image=logo_image, text="").pack(side="left", padx=(0, 8))
-        except Exception:
-            pass
-        ctk.CTkLabel(brand, text=APP_NAME, font=theme.FONT_TITLE).pack(side="left")
+        # Espaciador de marca: ocupa exactamente el ancho del sidebar (+ divisor)
+        # para que el filtro rápido arranque alineado con el borde izquierdo de la
+        # tarjeta de resultados. El logo ya no vive aquí (ensuciaba el header):
+        # ahora es marca de agua dentro del área de resultados.
+        brand = ctk.CTkFrame(
+            header, fg_color="transparent",
+            width=theme.SIDEBAR_WIDTH + 6, height=theme.HEADER_HEIGHT - 2 * theme.SPACE_XS,
+        )
+        brand.grid(row=0, column=0, pady=theme.SPACE_XS, sticky="w")
+        brand.grid_propagate(False)
+        self.header_brand = brand
 
-        self.quick_filter_entry = ctk.CTkEntry(header, placeholder_text=self.t("quick_filter_placeholder"))
-        self.quick_filter_entry.grid(row=0, column=1, padx=16, pady=8, sticky="ew")
+        # Pestaña de carpeta: esquinas superiores redondeadas visibles; las
+        # inferiores quedan recortadas por el borde del header, y justo debajo
+        # empieza la tarjeta del sidebar (mismo color) → conexión sin costura.
+        tab_visible = 30
+        self.folder_tab = ctk.CTkFrame(
+            header, width=150, height=tab_visible + theme.RADIUS_MD + 6,
+            corner_radius=theme.RADIUS_MD, fg_color=theme.SURFACE,
+        )
+        self.folder_tab.place(x=theme.SPACE_MD, y=theme.HEADER_HEIGHT - tab_visible)
+
+        search_wrap = ctk.CTkFrame(
+            header, fg_color=theme.SURFACE_ALT, corner_radius=theme.RADIUS_PILL,
+            border_width=theme.BORDER_WIDTH, border_color=theme.BORDER,
+        )
+        # padx izquierdo = padx de la tarjeta de la tabla (12), para que ambas
+        # cajas compartan la misma vertical.
+        search_wrap.grid(row=0, column=1, padx=(theme.SPACE_MD, theme.SPACE_LG), pady=theme.SPACE_SM, sticky="ew")
+        search_wrap.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(
+            search_wrap, text="", image=icons.search_icon(15, theme.TEXT_SECONDARY), width=16,
+        ).grid(row=0, column=0, padx=(theme.SPACE_MD, theme.SPACE_XS), pady=theme.SPACE_XS)
+        self.quick_filter_entry = ctk.CTkEntry(
+            search_wrap, placeholder_text=self.t("quick_filter_placeholder"),
+            fg_color="transparent", border_width=0, text_color=theme.TEXT_PRIMARY,
+        )
+        self.quick_filter_entry.grid(row=0, column=1, sticky="ew", padx=(0, theme.SPACE_MD), pady=theme.SPACE_XS)
         self.quick_filter_entry.bind("<Return>", self.apply_quick_filter)
 
         right = ctk.CTkFrame(header, fg_color="transparent")
-        right.grid(row=0, column=2, padx=16, pady=8, sticky="e")
-        self.result_count_label = ctk.CTkLabel(right, text=self.t("result_count", n=0), font=theme.FONT_BODY, text_color=theme.TEXT_MUTED)
-        self.result_count_label.pack(side="left", padx=(0, 12))
-        self.language_button = ctk.CTkButton(
-            right, text="EN", width=32, height=28, fg_color="transparent",
-            text_color=theme.TEXT_MUTED, hover_color=theme.GRAY_LIGHT, command=self._toggle_language,
+        right.grid(row=0, column=2, padx=theme.SPACE_LG, pady=theme.SPACE_SM, sticky="e")
+        self.result_count_label = ctk.CTkLabel(
+            right, text=self.t("result_count", n=0), font=theme.FONT_BODY, text_color=theme.TEXT_SECONDARY,
         )
-        self.language_button.pack(side="left", padx=(0, 4))
+        self.result_count_label.pack(side="left", padx=(0, theme.SPACE_MD))
+        self.language_button = ctk.CTkButton(
+            right, text="EN", width=36, height=30, command=self._toggle_language,
+            **theme.pill_button_style(),
+        )
+        self.language_button.pack(side="left", padx=(0, theme.SPACE_XS))
         self.theme_button = ctk.CTkButton(
-            right, text="🌙", width=32, height=28, fg_color="transparent",
-            text_color=theme.TEXT_MUTED, hover_color=theme.GRAY_LIGHT, command=self._toggle_theme,
+            right, text="🌙", width=36, height=30, command=self._toggle_theme,
+            **theme.pill_button_style(),
         )
         self.theme_button.pack(side="left")
 
@@ -157,6 +216,8 @@ class MainWindow(ctk.CTk):
         self._setup_treeview_style()
         self._update_paned_colors()
         self._set_titlebar_color()
+        self._set_icon()
+        self._refresh_watermark()
         self._render_detail(self.selected_job)
 
     def _toggle_language(self):
@@ -210,7 +271,7 @@ class MainWindow(ctk.CTk):
         if self.jobs:
             self._refresh_tree_type_labels()
         else:
-            self.empty_state_label.configure(text=self.t("empty_results"))
+            self._set_empty_state(self.t("empty_results"))
         if self.selected_job:
             self._render_detail(self.selected_job)
         else:
@@ -219,19 +280,31 @@ class MainWindow(ctk.CTk):
     # ---------- Sidebar ----------
 
     def _build_sidebar(self):
-        sidebar = ctk.CTkFrame(self.h_paned, corner_radius=0)
+        # bg_color explícito por la misma razón que table_frame: el padre es
+        # tk.PanedWindow y CTk congelaría el color detectado en la creación.
+        sidebar = ctk.CTkFrame(self.h_paned, corner_radius=0, fg_color=theme.BG_MAIN, bg_color=theme.BG_MAIN)
         self.sidebar_frame = sidebar
         self.h_paned.add(sidebar, width=theme.SIDEBAR_WIDTH, minsize=theme.SIDEBAR_MIN_WIDTH, stretch="never")
         sidebar.bind("<Configure>", self._on_sidebar_resize)
 
-        self.search_button = ctk.CTkButton(
-            sidebar, text=self.t("search_button"), height=42, font=theme.FONT_SECTION,
-            fg_color=theme.GREEN, hover_color=theme.GREEN_HOVER, command=self.search_jobs,
+        # Cuerpo de la carpeta: tarjeta que arranca pegada al header, justo
+        # debajo de la pestaña, para que ambas formen una sola silueta.
+        card = ctk.CTkFrame(
+            sidebar, fg_color=theme.SURFACE, corner_radius=theme.RADIUS_LG, bg_color=theme.BG_MAIN,
         )
-        self.search_button.pack(fill="x", padx=16, pady=(16, 12))
+        card.pack(fill="both", expand=True, padx=(theme.SPACE_MD, 0), pady=(0, theme.SPACE_SM))
+        # Parche que cuadra la esquina superior-izquierda bajo la pestaña: sin
+        # él, el radio de la tarjeta dejaría una cuña gris entre pestaña y cuerpo.
+        ctk.CTkFrame(card, width=48, height=24, corner_radius=0, fg_color=theme.SURFACE).place(x=0, y=0)
 
-        scroll = ctk.CTkScrollableFrame(sidebar, fg_color="transparent")
-        scroll.pack(fill="both", expand=True, padx=16)
+        self.search_button = ctk.CTkButton(
+            card, text=self.t("search_button"), height=44, command=self.search_jobs,
+            **theme.primary_button_style(),
+        )
+        self.search_button.pack(fill="x", padx=theme.SPACE_LG, pady=(theme.SPACE_LG, theme.SPACE_MD))
+
+        scroll = ctk.CTkScrollableFrame(card, fg_color="transparent")
+        scroll.pack(fill="both", expand=True, padx=theme.SPACE_SM)
         self.sidebar_scroll = scroll
 
         # Orden por función: qué buscas (rol + keywords que afinan el match),
@@ -242,22 +315,25 @@ class MainWindow(ctk.CTk):
         self._build_sources_section(scroll)
         self._build_custom_sources_section(scroll)
 
-        actions = ctk.CTkFrame(sidebar, fg_color="transparent")
-        actions.pack(fill="x", padx=16, pady=(4, 16))
+        actions = ctk.CTkFrame(card, fg_color="transparent")
+        actions.pack(fill="x", padx=theme.SPACE_LG, pady=(theme.SPACE_XS, theme.SPACE_LG))
         self.export_button = ctk.CTkButton(
-            actions, text=self.t("export_button"), fg_color="transparent", border_width=1,
-            border_color=theme.GRAY, text_color=theme.TEXT_MUTED, hover_color=theme.GRAY_LIGHT,
-            command=self.export_all, anchor="w",
+            actions, text=self.t("export_button"), command=self.export_all,
+            **theme.secondary_button_style(),
         )
-        self.export_button.pack(fill="x", pady=(0, 6))
+        self.export_button.pack(fill="x", pady=(0, theme.SPACE_SM))
         self.save_button = ctk.CTkButton(
-            actions, text=self.t("save_button"), fg_color="transparent", border_width=1,
-            border_color=theme.GRAY, text_color=theme.TEXT_MUTED, hover_color=theme.GRAY_LIGHT,
-            command=self.save_config, anchor="w",
+            actions, text=self.t("save_button"), command=self.save_config,
+            **theme.secondary_button_style(),
         )
         self.save_button.pack(fill="x")
 
     def _on_sidebar_resize(self, event=None):
+        # Mantiene la zona de marca del header con el mismo ancho que el
+        # sidebar, para que el filtro rápido siga alineado con la tarjeta de
+        # resultados aunque se arrastre el divisor.
+        if hasattr(self, "header_brand"):
+            self.header_brand.configure(width=self.sidebar_frame.winfo_width() + 6)
         # Reajusta el ancho de línea de los textos que envuelven, para que
         # sigan leyéndose completos al achicar/agrandar el panel.
         if not hasattr(self, "custom_sources_hint_label"):
@@ -265,109 +341,138 @@ class MainWindow(ctk.CTk):
         wrap = max(130, self.sidebar_frame.winfo_width() - 80)
         self.custom_sources_hint_label.configure(wraplength=wrap)
 
+    def _section_card(self, parent):
+        """Tarjeta contenedora de una sección del sidebar (Roles, Keywords, etc.)."""
+        card = ctk.CTkFrame(parent, **theme.bordered_card_style())
+        card.pack(fill="x", pady=(0, theme.SPACE_MD))
+        return card
+
     def _section_label(self, parent, text):
-        label = ctk.CTkLabel(parent, text=text, font=theme.FONT_SECTION, anchor="w")
-        label.pack(fill="x", pady=(12, 4))
+        row = ctk.CTkFrame(parent, fg_color="transparent")
+        row.pack(fill="x", padx=theme.SPACE_MD, pady=(theme.SPACE_MD, theme.SPACE_XS))
+        # Acento de marca en lugar de emoji: los emojis traen colores propios
+        # que no siguen el tema; una barra verde marca la sección sin ruido.
+        accent = ctk.CTkFrame(row, width=3, height=14, corner_radius=2, fg_color=theme.GREEN)
+        accent.pack(side="left")
+        accent.pack_propagate(False)
+        label = ctk.CTkLabel(row, text=text, font=theme.FONT_SECTION, text_color=theme.TEXT_PRIMARY, anchor="w")
+        label.pack(side="left", fill="x", expand=True, padx=(theme.SPACE_SM, 0))
         return label
 
     def _small_action_button(self, parent, text, command):
         button = ctk.CTkButton(
-            parent, text=text, height=26, font=theme.FONT_SMALL, fg_color="transparent",
-            text_color=theme.TEXT_MUTED, hover_color=theme.GRAY_LIGHT, command=command,
-            anchor="w",
+            parent, text=text, height=26, font=theme.FONT_SMALL, command=command,
+            **theme.ghost_button_style(),
         )
-        button.pack(fill="x", pady=(4, 0))
+        button.pack(fill="x", padx=theme.SPACE_MD, pady=(theme.SPACE_XS, theme.SPACE_MD))
         self.delete_unchecked_buttons.append(button)
         return button
 
+    def _add_row_entry(self, parent, placeholder):
+        entry = ctk.CTkEntry(parent, placeholder_text=placeholder, **theme.input_style())
+        return entry
+
+    def _add_row_button(self, parent, command):
+        return ctk.CTkButton(parent, text="+", width=32, command=command, **theme.primary_button_style())
+
+    def _row_checkbox(self, parent, text, variable):
+        return ctk.CTkCheckBox(
+            parent, text=text, variable=variable, onvalue=True, offvalue=False, font=theme.FONT_BODY,
+            text_color=theme.TEXT_PRIMARY, **theme.checkbox_style(),
+        )
+
+    def _row_delete_button(self, parent, command):
+        return ctk.CTkButton(
+            parent, text="✕", width=24, height=24, command=command, **theme.ghost_button_style(),
+        )
+
     def _build_roles_section(self, parent):
-        self.roles_section_label = self._section_label(parent, self.t("section_roles"))
-        self.roles_frame = ctk.CTkFrame(parent, fg_color="transparent", height=0)
-        self.roles_frame.pack(fill="x")
+        card = self._section_card(parent)
+        self.roles_section_label = self._section_label(card, self.t("section_roles"))
+        self.roles_frame = ctk.CTkFrame(card, fg_color="transparent", height=0)
+        self.roles_frame.pack(fill="x", padx=theme.SPACE_MD)
         for r in DEFAULT_ROLES:
             self.create_role_row(r, enabled=True)
 
-        add_row = ctk.CTkFrame(parent, fg_color="transparent", height=0)
-        add_row.pack(fill="x", pady=(4, 0))
-        self.new_role_entry = ctk.CTkEntry(add_row, placeholder_text=self.t("new_role_placeholder"))
+        add_row = ctk.CTkFrame(card, fg_color="transparent", height=0)
+        add_row.pack(fill="x", padx=theme.SPACE_MD, pady=(theme.SPACE_SM, 0))
+        self.new_role_entry = self._add_row_entry(add_row, self.t("new_role_placeholder"))
         self.new_role_entry.pack(side="left", fill="x", expand=True)
         self.new_role_entry.bind("<Return>", lambda e: self.add_role())
-        ctk.CTkButton(
-            add_row, text="+", width=32, command=self.add_role,
-            fg_color=theme.GREEN, hover_color=theme.GREEN_HOVER,
-        ).pack(side="left", padx=(4, 0))
-        self._small_action_button(parent, self.t("delete_unchecked"), self.delete_unchecked_roles)
+        self._add_row_button(add_row, self.add_role).pack(side="left", padx=(theme.SPACE_XS, 0))
+        self._small_action_button(card, self.t("delete_unchecked"), self.delete_unchecked_roles)
 
     def _build_location_section(self, parent):
-        self.location_section_label = self._section_label(parent, self.t("section_location"))
-        self.locations_frame = ctk.CTkFrame(parent, fg_color="transparent", height=0)
-        self.locations_frame.pack(fill="x")
+        card = self._section_card(parent)
+        self.location_section_label = self._section_label(card, self.t("section_location"))
+        self.locations_frame = ctk.CTkFrame(card, fg_color="transparent", height=0)
+        self.locations_frame.pack(fill="x", padx=theme.SPACE_MD)
         for loc in DEFAULT_LOCATIONS:
             self.create_location_row(loc, enabled=True)
 
-        add_row = ctk.CTkFrame(parent, fg_color="transparent", height=0)
-        add_row.pack(fill="x", pady=(4, 0))
-        self.custom_location_entry = ctk.CTkEntry(add_row, placeholder_text=self.t("new_location_placeholder"))
+        add_row = ctk.CTkFrame(card, fg_color="transparent", height=0)
+        add_row.pack(fill="x", padx=theme.SPACE_MD, pady=(theme.SPACE_SM, 0))
+        self.custom_location_entry = self._add_row_entry(add_row, self.t("new_location_placeholder"))
         self.custom_location_entry.pack(side="left", fill="x", expand=True)
         self.custom_location_entry.bind("<Return>", lambda e: self.add_location())
-        ctk.CTkButton(
-            add_row, text="+", width=32, command=self.add_location,
-            fg_color=theme.GREEN, hover_color=theme.GREEN_HOVER,
-        ).pack(side="left", padx=(4, 0))
-        self._small_action_button(parent, self.t("delete_unchecked"), self.delete_unchecked_locations)
+        self._add_row_button(add_row, self.add_location).pack(side="left", padx=(theme.SPACE_XS, 0))
+        self._small_action_button(card, self.t("delete_unchecked"), self.delete_unchecked_locations)
 
     def _build_sources_section(self, parent):
-        self.sources_section_label = self._section_label(parent, self.t("section_sources"))
-        self.sources_frame = ctk.CTkFrame(parent, fg_color="transparent", height=0)
-        self.sources_frame.pack(fill="x")
+        card = self._section_card(parent)
+        self.sources_section_label = self._section_label(card, self.t("section_sources"))
+        self.sources_frame = ctk.CTkFrame(card, fg_color="transparent", height=0)
+        self.sources_frame.pack(fill="x", padx=theme.SPACE_MD)
         for src, enabled in DEFAULT_SOURCES.items():
             self.create_source_row(src, enabled=enabled)
-        self._small_action_button(parent, self.t("delete_unchecked"), self.delete_unchecked_sources)
+        self._small_action_button(card, self.t("delete_unchecked"), self.delete_unchecked_sources)
 
     def _build_custom_sources_section(self, parent):
-        self.custom_sources_section_label = self._section_label(parent, self.t("section_custom_sources"))
+        card = self._section_card(parent)
+        self.custom_sources_section_label = self._section_label(card, self.t("section_custom_sources"))
         self.custom_sources_hint_label = ctk.CTkLabel(
-            parent, text=self.t("section_custom_sources_hint"),
-            font=theme.FONT_SMALL, text_color=theme.TEXT_MUTED, anchor="w",
+            card, text=self.t("section_custom_sources_hint"),
+            font=theme.FONT_SMALL, text_color=theme.TEXT_SECONDARY, anchor="w",
             wraplength=theme.SIDEBAR_WIDTH - 80, justify="left",
         )
-        self.custom_sources_hint_label.pack(fill="x")
-        self.custom_sources_frame = ctk.CTkFrame(parent, fg_color="transparent", height=0)
-        self.custom_sources_frame.pack(fill="x", pady=(4, 0))
+        self.custom_sources_hint_label.pack(fill="x", padx=theme.SPACE_MD)
+        self.custom_sources_frame = ctk.CTkFrame(card, fg_color="transparent", height=0)
+        self.custom_sources_frame.pack(fill="x", padx=theme.SPACE_MD, pady=(theme.SPACE_SM, 0))
 
-        self.new_custom_source_name_entry = ctk.CTkEntry(parent, placeholder_text=self.t("new_source_name_placeholder"))
-        self.new_custom_source_name_entry.pack(fill="x", pady=(4, 2))
-        self.new_custom_source_domain_entry = ctk.CTkEntry(parent, placeholder_text=self.t("new_source_domain_placeholder"))
-        self.new_custom_source_domain_entry.pack(fill="x")
+        self.new_custom_source_name_entry = self._add_row_entry(card, self.t("new_source_name_placeholder"))
+        self.new_custom_source_name_entry.pack(fill="x", padx=theme.SPACE_MD, pady=(theme.SPACE_SM, theme.SPACE_XXS))
+        self.new_custom_source_domain_entry = self._add_row_entry(card, self.t("new_source_domain_placeholder"))
+        self.new_custom_source_domain_entry.pack(fill="x", padx=theme.SPACE_MD)
         self.new_custom_source_domain_entry.bind("<Return>", lambda e: self.add_custom_source())
         self.add_custom_source_button = ctk.CTkButton(
-            parent, text=self.t("add_source_button"), command=self.add_custom_source,
-            fg_color=theme.GREEN, hover_color=theme.GREEN_HOVER,
+            card, text=self.t("add_source_button"), command=self.add_custom_source,
+            **theme.primary_button_style(),
         )
-        self.add_custom_source_button.pack(fill="x", pady=(4, 0))
-        self._small_action_button(parent, self.t("delete_unchecked"), self.delete_unchecked_custom_sources)
+        self.add_custom_source_button.pack(fill="x", padx=theme.SPACE_MD, pady=(theme.SPACE_SM, 0))
+        self._small_action_button(card, self.t("delete_unchecked"), self.delete_unchecked_custom_sources)
 
     def _build_keywords_section(self, parent):
-        self.keywords_section_label = self._section_label(parent, self.t("section_keywords"))
-        self.keywords_frame = ctk.CTkFrame(parent, fg_color="transparent", height=0)
-        self.keywords_frame.pack(fill="x")
+        card = self._section_card(parent)
+        self.keywords_section_label = self._section_label(card, self.t("section_keywords"))
+        self.keywords_frame = ctk.CTkFrame(card, fg_color="transparent", height=0)
+        self.keywords_frame.pack(fill="x", padx=theme.SPACE_MD)
         for k, pts in DEFAULT_PROFILE_KEYWORDS.items():
             self.create_keyword_row(k, pts, enabled=True)
 
-        add_row = ctk.CTkFrame(parent, fg_color="transparent", height=0)
-        add_row.pack(fill="x", pady=(4, 0))
-        self.new_keyword_entry = ctk.CTkEntry(add_row, placeholder_text=self.t("new_keyword_placeholder"))
+        add_row = ctk.CTkFrame(card, fg_color="transparent", height=0)
+        add_row.pack(fill="x", padx=theme.SPACE_MD, pady=(theme.SPACE_SM, 0))
+        self.new_keyword_entry = self._add_row_entry(add_row, self.t("new_keyword_placeholder"))
         self.new_keyword_entry.pack(side="left", fill="x", expand=True)
         self.new_keyword_entry.bind("<Return>", lambda e: self.add_keyword())
-        self.new_keyword_points_entry = ctk.CTkEntry(add_row, width=40)
+        self.new_keyword_points_entry = ctk.CTkEntry(add_row, width=40, **theme.input_style())
         self.new_keyword_points_entry.insert(0, "10")
-        self.new_keyword_points_entry.pack(side="left", padx=(4, 0))
+        self.new_keyword_points_entry.pack(side="left", padx=(theme.SPACE_XS, 0))
         self.add_keyword_button = ctk.CTkButton(
-            parent, text=self.t("add_keyword_button"), command=self.add_keyword,
-            fg_color=theme.GREEN, hover_color=theme.GREEN_HOVER,
+            card, text=self.t("add_keyword_button"), command=self.add_keyword,
+            **theme.primary_button_style(),
         )
-        self.add_keyword_button.pack(fill="x", pady=(4, 0))
-        self._small_action_button(parent, self.t("delete_unchecked"), self.delete_unchecked_keywords)
+        self.add_keyword_button.pack(fill="x", padx=theme.SPACE_MD, pady=(theme.SPACE_SM, 0))
+        self._small_action_button(card, self.t("delete_unchecked"), self.delete_unchecked_keywords)
 
     # ---------- Roles ----------
 
@@ -379,16 +484,9 @@ class MainWindow(ctk.CTk):
         self.role_vars[role] = v
 
         row = ctk.CTkFrame(self.roles_frame, fg_color="transparent")
-        row.pack(fill="x", anchor="w", pady=1)
-        ctk.CTkCheckBox(
-            row, text=role, variable=v, onvalue=True, offvalue=False, font=theme.FONT_BODY,
-            fg_color=theme.GREEN, hover_color=theme.GREEN_HOVER,
-        ).pack(side="left", fill="x", expand=True, anchor="w")
-        ctk.CTkButton(
-            row, text="✕", width=24, height=24, fg_color="transparent",
-            text_color=theme.TEXT_MUTED, hover_color=theme.GRAY_LIGHT,
-            command=lambda r=role: self.delete_role(r),
-        ).pack(side="right")
+        row.pack(fill="x", anchor="w", pady=2)
+        self._row_checkbox(row, role, v).pack(side="left", fill="x", expand=True, anchor="w")
+        self._row_delete_button(row, lambda r=role: self.delete_role(r)).pack(side="right")
         self.role_widgets[role] = row
 
     def add_role(self):
@@ -433,17 +531,10 @@ class MainWindow(ctk.CTk):
         self.keyword_weight_vars[keyword] = pts
 
         row = ctk.CTkFrame(self.keywords_frame, fg_color="transparent")
-        row.pack(fill="x", anchor="w", pady=1)
-        ctk.CTkCheckBox(
-            row, text=keyword, variable=v, onvalue=True, offvalue=False, font=theme.FONT_BODY,
-            fg_color=theme.GREEN, hover_color=theme.GREEN_HOVER,
-        ).pack(side="left", fill="x", expand=True, anchor="w")
-        ctk.CTkEntry(row, width=40, textvariable=pts).pack(side="left", padx=(4, 2))
-        ctk.CTkButton(
-            row, text="✕", width=24, height=24, fg_color="transparent",
-            text_color=theme.TEXT_MUTED, hover_color=theme.GRAY_LIGHT,
-            command=lambda k=keyword: self.delete_keyword(k),
-        ).pack(side="right")
+        row.pack(fill="x", anchor="w", pady=2)
+        self._row_checkbox(row, keyword, v).pack(side="left", fill="x", expand=True, anchor="w")
+        ctk.CTkEntry(row, width=40, textvariable=pts, **theme.input_style()).pack(side="left", padx=(theme.SPACE_XS, theme.SPACE_XXS))
+        self._row_delete_button(row, lambda k=keyword: self.delete_keyword(k)).pack(side="right")
         self.keyword_widgets[keyword] = row
 
     def _keyword_points(self, keyword):
@@ -497,16 +588,9 @@ class MainWindow(ctk.CTk):
         self.location_vars[location] = v
 
         row = ctk.CTkFrame(self.locations_frame, fg_color="transparent")
-        row.pack(fill="x", anchor="w", pady=1)
-        ctk.CTkCheckBox(
-            row, text=location, variable=v, onvalue=True, offvalue=False, font=theme.FONT_BODY,
-            fg_color=theme.GREEN, hover_color=theme.GREEN_HOVER,
-        ).pack(side="left", fill="x", expand=True, anchor="w")
-        ctk.CTkButton(
-            row, text="✕", width=24, height=24, fg_color="transparent",
-            text_color=theme.TEXT_MUTED, hover_color=theme.GRAY_LIGHT,
-            command=lambda l=location: self.delete_location(l),
-        ).pack(side="right")
+        row.pack(fill="x", anchor="w", pady=2)
+        self._row_checkbox(row, location, v).pack(side="left", fill="x", expand=True, anchor="w")
+        self._row_delete_button(row, lambda l=location: self.delete_location(l)).pack(side="right")
         self.location_widgets[location] = row
 
     def add_location(self):
@@ -548,16 +632,9 @@ class MainWindow(ctk.CTk):
         self.source_vars[source] = v
 
         row = ctk.CTkFrame(self.sources_frame, fg_color="transparent")
-        row.pack(fill="x", anchor="w", pady=1)
-        ctk.CTkCheckBox(
-            row, text=source, variable=v, onvalue=True, offvalue=False, font=theme.FONT_BODY,
-            fg_color=theme.GREEN, hover_color=theme.GREEN_HOVER,
-        ).pack(side="left", fill="x", expand=True, anchor="w")
-        ctk.CTkButton(
-            row, text="✕", width=24, height=24, fg_color="transparent",
-            text_color=theme.TEXT_MUTED, hover_color=theme.GRAY_LIGHT,
-            command=lambda s=source: self.delete_source(s),
-        ).pack(side="right")
+        row.pack(fill="x", anchor="w", pady=2)
+        self._row_checkbox(row, source, v).pack(side="left", fill="x", expand=True, anchor="w")
+        self._row_delete_button(row, lambda s=source: self.delete_source(s)).pack(side="right")
         self.source_widgets[source] = row
 
     def delete_source(self, source, save=True):
@@ -589,16 +666,9 @@ class MainWindow(ctk.CTk):
         self.custom_source_domains[name] = domain
 
         row = ctk.CTkFrame(self.custom_sources_frame, fg_color="transparent")
-        row.pack(fill="x", anchor="w", pady=1)
-        ctk.CTkCheckBox(
-            row, text=f"{name} ({domain})", variable=v, onvalue=True, offvalue=False, font=theme.FONT_BODY,
-            fg_color=theme.GREEN, hover_color=theme.GREEN_HOVER,
-        ).pack(side="left", fill="x", expand=True, anchor="w")
-        ctk.CTkButton(
-            row, text="✕", width=24, height=24, fg_color="transparent",
-            text_color=theme.TEXT_MUTED, hover_color=theme.GRAY_LIGHT,
-            command=lambda n=name: self.delete_custom_source(n),
-        ).pack(side="right")
+        row.pack(fill="x", anchor="w", pady=2)
+        self._row_checkbox(row, f"{name} ({domain})", v).pack(side="left", fill="x", expand=True, anchor="w")
+        self._row_delete_button(row, lambda n=name: self.delete_custom_source(n)).pack(side="right")
         self.custom_source_widgets[name] = row
 
     def add_custom_source(self):
@@ -678,12 +748,20 @@ class MainWindow(ctk.CTk):
             pass
         style.configure(
             "OTW.Treeview", background=theme.TABLE_BG[idx], fieldbackground=theme.TABLE_BG[idx],
-            foreground=theme.TABLE_FG[idx], rowheight=26, borderwidth=0, font=theme.FONT_BODY,
+            foreground=theme.TABLE_FG[idx], rowheight=30, borderwidth=0, font=theme.FONT_BODY,
+            relief="flat",
+            # clam dibuja un borde propio con estos tres colores; igualarlos al
+            # fondo elimina el marco claro que se ve alrededor de la tabla en oscuro.
+            bordercolor=theme.TABLE_BG[idx], lightcolor=theme.TABLE_BG[idx], darkcolor=theme.TABLE_BG[idx],
         )
+        # Cabecera integrada en la tarjeta (mismo fondo, texto secundario en
+        # menor peso): las bandas grises de cabecera rompen la superficie.
         style.configure(
-            "OTW.Treeview.Heading", background=theme.TABLE_HEADING_BG[idx], foreground=theme.TABLE_FG[idx],
-            font=theme.FONT_SECTION, relief="flat",
+            "OTW.Treeview.Heading", background=theme.TABLE_BG[idx], foreground=theme.TEXT_SECONDARY[idx],
+            font=theme.FONT_SMALL, relief="flat", padding=(6, 9),
+            bordercolor=theme.TABLE_BG[idx], lightcolor=theme.TABLE_BG[idx], darkcolor=theme.TABLE_BG[idx],
         )
+        style.map("OTW.Treeview.Heading", background=[("active", theme.TABLE_BG[idx])])
         style.map(
             "OTW.Treeview", background=[("selected", theme.SELECTION_BG[idx])],
             foreground=[("selected", theme.SELECTION_FG[idx])],
@@ -697,10 +775,15 @@ class MainWindow(ctk.CTk):
             self.tree.tag_configure("discarded", foreground=theme.ROW_DISCARDED_FG[idx])
 
     def _build_main_area(self):
-        self.v_paned = tk.PanedWindow(self.h_paned, orient="vertical", sashwidth=6, bd=0, relief="flat")
+        self.v_paned = tk.PanedWindow(
+            self.h_paned, orient="vertical", sashwidth=6, bd=0, relief="flat",
+            bg=theme.WINDOW_BG[self._dark_mode_index()],
+        )
         self.h_paned.add(self.v_paned, minsize=theme.MAIN_AREA_MIN_WIDTH, stretch="always")
 
-        self.table_frame = ctk.CTkFrame(self.v_paned, corner_radius=10)
+        # bg_color explícito: el padre es tk.PanedWindow, así que CTk no puede
+        # deducir el color de fondo del tema y las esquinas saldrían claras.
+        self.table_frame = ctk.CTkFrame(self.v_paned, bg_color=theme.BG_MAIN, **theme.bordered_card_style())
         self.v_paned.add(self.table_frame, minsize=theme.TABLE_MIN_HEIGHT, stretch="always", padx=12, pady=8)
         self.table_frame.grid_rowconfigure(0, weight=1)
         self.table_frame.grid_columnconfigure(0, weight=1)
@@ -712,30 +795,75 @@ class MainWindow(ctk.CTk):
             "location": self.t("col_location"), "source": self.t("col_source"),
             "published": self.t("col_published"), "type": self.t("col_type"),
         }
-        widths = {"state": 70, "match": 60, "title": 250, "company": 150, "location": 130, "source": 130, "published": 100, "type": 140}
+        widths = {"state": 80, "match": 70, "title": 250, "company": 150, "location": 130, "source": 130, "published": 100, "type": 155}
+        # Los datos numéricos/simbólicos centrados se escanean mejor; el texto, a la izquierda.
+        anchors = {"state": "center", "match": "center"}
         self.tree = ttk.Treeview(self.table_frame, columns=columns, show="headings", style="OTW.Treeview")
         for c in columns:
-            self.tree.heading(c, text=headings[c])
-            self.tree.column(c, width=widths[c], anchor="w")
+            self.tree.heading(c, text=headings[c], anchor=anchors.get(c, "w"))
+            self.tree.column(c, width=widths[c], anchor=anchors.get(c, "w"))
         self._setup_treeview_style()
-        self.tree.grid(row=0, column=0, sticky="nsew", padx=(1, 0), pady=1)
+        # El Treeview es un rectángulo opaco: si toca los bordes de la tarjeta
+        # tapa las esquinas redondeadas, así que se inseta lo justo para que
+        # la curva del radio quede siempre visible.
+        self.tree.grid(
+            row=0, column=0, sticky="nsew",
+            padx=(theme.SPACE_MD, 0), pady=(theme.SPACE_SM, theme.SPACE_MD),
+        )
         self.tree.bind("<<TreeviewSelect>>", self._on_tree_select)
         self.tree.bind("<Double-1>", lambda e: self.open_selected())
 
-        tree_scroll = ttk.Scrollbar(self.table_frame, orient="vertical", command=self.tree.yview)
+        tree_scroll = ctk.CTkScrollbar(self.table_frame, orientation="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=tree_scroll.set)
-        tree_scroll.grid(row=0, column=1, sticky="ns", pady=1)
+        tree_scroll.grid(row=0, column=1, sticky="ns", padx=(0, theme.SPACE_XS), pady=(theme.SPACE_SM, theme.SPACE_MD))
 
-        self.empty_state_label = ctk.CTkLabel(
-            self.table_frame, text=self.t("empty_results"),
-            font=theme.FONT_BODY, text_color=theme.TEXT_MUTED, justify="center", fg_color=theme.TABLE_BG,
-        )
-        self.empty_state_label.place(relx=0.5, rely=0.5, anchor="center")
-
+        self._build_empty_state()
         self._build_detail_panel()
 
+    def _build_empty_state(self):
+        # Estado vacío centrado sobre la tabla: icono, título, texto y CTA.
+        # Reutiliza las traducciones existentes de "empty_results" / "searching"
+        # (primera línea = título, segunda línea opcional = subtítulo).
+        self.empty_state_frame = ctk.CTkFrame(self.table_frame, fg_color="transparent")
+
+        # Marca de agua: el logo grande y muy tenue, fundido con la superficie de
+        # la tarjeta (Tk no compone alfa parcial fiable, así que la opacidad se
+        # hornea en la imagen). Va encima del texto en el flujo vertical para que
+        # nada lo solape, y se regenera al cambiar de tema.
+        self.watermark_label = ctk.CTkLabel(self.empty_state_frame, text="", fg_color="transparent")
+        self.watermark_label.pack(pady=(0, theme.SPACE_MD))
+        self._refresh_watermark()
+
+        self.empty_state_title_label = ctk.CTkLabel(
+            self.empty_state_frame, text="", font=theme.FONT_SUBTITLE, text_color=theme.TEXT_PRIMARY,
+        )
+        self.empty_state_title_label.pack()
+        self.empty_state_label = ctk.CTkLabel(
+            self.empty_state_frame, text="", font=theme.FONT_BODY, text_color=theme.TEXT_SECONDARY, justify="center",
+        )
+        self.empty_state_label.pack(pady=(theme.SPACE_XS, 0))
+
+        self._set_empty_state(self.t("empty_results"))
+
+    def _refresh_watermark(self):
+        try:
+            self._watermark_image = icons.watermark_logo(theme.LOGO_PATH, 300, theme.SURFACE)
+            self.watermark_label.configure(image=self._watermark_image)
+        except Exception:
+            pass
+
+    def _set_empty_state(self, message):
+        lines = message.split("\n", 1)
+        self.empty_state_title_label.configure(text=lines[0])
+        self.empty_state_label.configure(text=lines[1] if len(lines) > 1 else "")
+        # Ligeramente por debajo del centro para no rozar la fila de cabeceras.
+        self.empty_state_frame.place(relx=0.5, rely=0.56, anchor="center")
+
+    def _hide_empty_state(self):
+        self.empty_state_frame.place_forget()
+
     def _build_detail_panel(self):
-        self.detail_frame = ctk.CTkFrame(self.v_paned, corner_radius=10)
+        self.detail_frame = ctk.CTkFrame(self.v_paned, bg_color=theme.BG_MAIN, **theme.bordered_card_style())
         self.v_paned.add(
             self.detail_frame, height=theme.DETAIL_HEIGHT, minsize=theme.DETAIL_MIN_HEIGHT,
             stretch="never", padx=12, pady=8,
@@ -743,11 +871,18 @@ class MainWindow(ctk.CTk):
         self.detail_frame.grid_rowconfigure(0, weight=1)
         self.detail_frame.grid_columnconfigure(0, weight=1)
 
+        empty_wrap = ctk.CTkFrame(self.detail_frame, fg_color="transparent")
+        self.detail_empty_wrap = empty_wrap
+        ctk.CTkLabel(
+            empty_wrap, text="", image=icons.document_icon(20, theme.TEXT_SECONDARY),
+            fg_color=theme.SURFACE_ALT, corner_radius=theme.RADIUS_PILL, width=48, height=48,
+        ).pack(pady=(0, theme.SPACE_SM))
         self.detail_empty_label = ctk.CTkLabel(
-            self.detail_frame, text=self.t("empty_detail"),
-            font=theme.FONT_BODY, text_color=theme.TEXT_MUTED,
+            empty_wrap, text=self.t("empty_detail"),
+            font=theme.FONT_BODY, text_color=theme.TEXT_SECONDARY,
         )
-        self.detail_empty_label.place(relx=0.5, rely=0.5, anchor="center")
+        self.detail_empty_label.pack()
+        empty_wrap.place(relx=0.5, rely=0.5, anchor="center")
 
         self.detail_content = ctk.CTkFrame(self.detail_frame, fg_color="transparent")
         self.detail_content.grid_columnconfigure(0, weight=1)
@@ -755,74 +890,78 @@ class MainWindow(ctk.CTk):
         self.detail_content.grid_rowconfigure(3, weight=1)
 
         header_row = ctk.CTkFrame(self.detail_content, fg_color="transparent")
-        header_row.grid(row=0, column=0, sticky="ew", padx=16, pady=(12, 0))
+        header_row.grid(row=0, column=0, sticky="ew", padx=theme.SPACE_LG, pady=(theme.SPACE_MD, 0))
         self.detail_type_badge = ctk.CTkLabel(
-            header_row, text="", font=theme.FONT_SMALL, corner_radius=6, width=110,
+            header_row, text="", font=theme.FONT_BADGE, corner_radius=theme.RADIUS_SM, width=110, height=26,
         )
         self.detail_type_badge.pack(side="left")
         self.detail_match_badge = ctk.CTkLabel(
-            header_row, text="", font=("Segoe UI", 13, "bold"), corner_radius=6, width=54,
+            header_row, text="", font=theme.FONT_BADGE, corner_radius=theme.RADIUS_SM, width=54, height=26,
         )
-        self.detail_match_badge.pack(side="left", padx=(8, 0))
-        self.detail_title_label = ctk.CTkLabel(header_row, text="", font=theme.FONT_TITLE, anchor="w")
-        self.detail_title_label.pack(side="left", padx=(12, 0), fill="x", expand=True)
+        self.detail_match_badge.pack(side="left", padx=(theme.SPACE_SM, 0))
+        self.detail_title_label = ctk.CTkLabel(
+            header_row, text="", font=theme.FONT_TITLE, text_color=theme.TEXT_PRIMARY, anchor="w",
+        )
+        self.detail_title_label.pack(side="left", padx=(theme.SPACE_MD, 0), fill="x", expand=True)
 
         self.detail_subtitle_label = ctk.CTkLabel(
-            self.detail_content, text="", font=theme.FONT_BODY, text_color=theme.TEXT_MUTED,
+            self.detail_content, text="", font=theme.FONT_BODY, text_color=theme.TEXT_SECONDARY,
             anchor="w", justify="left",
         )
-        self.detail_subtitle_label.grid(row=1, column=0, sticky="ew", padx=16, pady=(6, 0))
+        self.detail_subtitle_label.grid(row=1, column=0, sticky="ew", padx=theme.SPACE_LG, pady=(theme.SPACE_SM, 0))
 
         self.detail_skills_label = ctk.CTkLabel(
-            self.detail_content, text="", font=theme.FONT_SMALL, text_color=theme.TEXT_MUTED,
+            self.detail_content, text="", font=theme.FONT_SMALL, text_color=theme.TEXT_SECONDARY,
             anchor="w", justify="left",
         )
-        self.detail_skills_label.grid(row=2, column=0, sticky="ew", padx=16, pady=(4, 0))
+        self.detail_skills_label.grid(row=2, column=0, sticky="ew", padx=theme.SPACE_LG, pady=(theme.SPACE_XS, 0))
 
         self.detail_description_box = ctk.CTkTextbox(
-            self.detail_content, height=70, font=theme.FONT_SMALL, wrap="word",
-            fg_color=theme.DESCRIPTION_BG, text_color=theme.TABLE_FG,
+            self.detail_content, height=70, font=theme.FONT_SMALL, wrap="word", corner_radius=theme.RADIUS_SM,
+            fg_color=theme.DESCRIPTION_BG, text_color=theme.TEXT_PRIMARY, border_width=theme.BORDER_WIDTH,
+            border_color=theme.BORDER,
         )
-        self.detail_description_box.grid(row=3, column=0, sticky="nsew", padx=16, pady=(8, 12))
+        self.detail_description_box.grid(row=3, column=0, sticky="nsew", padx=theme.SPACE_LG, pady=(theme.SPACE_SM, theme.SPACE_MD))
 
         buttons_col = ctk.CTkFrame(self.detail_content, fg_color="transparent")
-        buttons_col.grid(row=0, column=1, rowspan=4, sticky="n", padx=16, pady=12)
+        buttons_col.grid(row=0, column=1, rowspan=4, sticky="n", padx=theme.SPACE_LG, pady=theme.SPACE_MD)
         self.detail_open_button = ctk.CTkButton(
-            buttons_col, text=self.t("open_link_button"), fg_color=theme.GREEN, hover_color=theme.GREEN_HOVER,
-            command=self.open_selected,
+            buttons_col, text=self.t("open_link_button"), command=self.open_selected,
+            **theme.primary_button_style(),
         )
-        self.detail_open_button.pack(fill="x", pady=(0, 6))
+        self.detail_open_button.pack(fill="x", pady=(0, theme.SPACE_SM))
         self.detail_fallback_button = ctk.CTkButton(
-            buttons_col, text=self.t("open_fallback_button"), fg_color="transparent", border_width=1,
-            border_color=theme.GRAY, text_color=theme.TEXT_MUTED, hover_color=theme.GRAY_LIGHT,
-            command=self.open_fallback,
+            buttons_col, text=self.t("open_fallback_button"), command=self.open_fallback,
+            **theme.secondary_button_style(),
         )
-        self.detail_fallback_button.pack(fill="x", pady=(0, 6))
+        self.detail_fallback_button.pack(fill="x", pady=(0, theme.SPACE_SM))
         self.detail_export_button = ctk.CTkButton(
-            buttons_col, text=self.t("export_all_button"), fg_color="transparent", border_width=1,
-            border_color=theme.GRAY, text_color=theme.TEXT_MUTED, hover_color=theme.GRAY_LIGHT,
-            command=self.export_all,
+            buttons_col, text=self.t("export_all_button"), command=self.export_all,
+            **theme.secondary_button_style(),
         )
         self.detail_export_button.pack(fill="x")
 
         state_row = ctk.CTkFrame(self.detail_content, fg_color="transparent")
-        state_row.grid(row=4, column=0, columnspan=2, sticky="ew", padx=16, pady=(0, 10))
+        state_row.grid(row=4, column=0, columnspan=2, sticky="ew", padx=theme.SPACE_LG, pady=(0, theme.SPACE_MD))
         self.favorite_button = ctk.CTkButton(
-            state_row, text=self.t("mark_favorite"), width=104, height=26, font=theme.FONT_SMALL,
-            command=lambda: self._toggle_state_flag("favorite"),
+            state_row, text=self.t("mark_favorite"), width=104, height=28, font=theme.FONT_SMALL,
+            corner_radius=theme.RADIUS_SM, command=lambda: self._toggle_state_flag("favorite"),
         )
-        self.favorite_button.pack(side="left", padx=(0, 6))
+        self.favorite_button.pack(side="left", padx=(0, theme.SPACE_SM))
         self.applied_button = ctk.CTkButton(
-            state_row, text=self.t("mark_applied"), width=104, height=26, font=theme.FONT_SMALL,
-            command=lambda: self._toggle_state_flag("applied"),
+            state_row, text=self.t("mark_applied"), width=104, height=28, font=theme.FONT_SMALL,
+            corner_radius=theme.RADIUS_SM, command=lambda: self._toggle_state_flag("applied"),
         )
-        self.applied_button.pack(side="left", padx=(0, 6))
+        self.applied_button.pack(side="left", padx=(0, theme.SPACE_SM))
         self.discarded_button = ctk.CTkButton(
-            state_row, text=self.t("mark_discarded"), width=104, height=26, font=theme.FONT_SMALL,
-            command=lambda: self._toggle_state_flag("discarded"),
+            state_row, text=self.t("mark_discarded"), width=104, height=28, font=theme.FONT_SMALL,
+            corner_radius=theme.RADIUS_SM, command=lambda: self._toggle_state_flag("discarded"),
         )
-        self.discarded_button.pack(side="left", padx=(0, 12))
-        self.notes_entry = ctk.CTkEntry(state_row, height=26, font=theme.FONT_SMALL, placeholder_text=self.t("notes_placeholder"))
+        self.discarded_button.pack(side="left", padx=(0, theme.SPACE_MD))
+        self.notes_entry = ctk.CTkEntry(
+            state_row, height=28, font=theme.FONT_SMALL, placeholder_text=self.t("notes_placeholder"),
+            **theme.input_style(),
+        )
         self.notes_entry.pack(side="left", fill="x", expand=True)
         self.notes_entry.bind("<Return>", lambda e: self._save_notes())
         self.notes_entry.bind("<FocusOut>", lambda e: self._save_notes())
@@ -849,17 +988,19 @@ class MainWindow(ctk.CTk):
         self._refresh_row_state(job)
 
     def _state_icons(self, job):
+        # Glifos de texto (no emoji): monocromos, heredan el color de la fila
+        # y mantienen la tabla visualmente serena.
         state = self._get_state(job)
-        icons = ""
+        glyphs = ""
         if state.get("favorite"):
-            icons += "⭐"
+            glyphs += "★"
         if state.get("applied"):
-            icons += "✔"
+            glyphs += "✓"
         if state.get("discarded"):
-            icons += "✕"
+            glyphs += "✕"
         if (state.get("notes") or "").strip():
-            icons += "📝"
-        return icons
+            glyphs += "✎"
+        return " ".join(glyphs)
 
     def _row_tags(self, job):
         bg_tag = "api" if job.get("type") == "api_result" else "search"
@@ -890,8 +1031,8 @@ class MainWindow(ctk.CTk):
             button.configure(fg_color=active_color, hover_color=active_color, text_color=theme.WHITE, border_width=0)
         else:
             button.configure(
-                fg_color="transparent", hover_color=theme.GRAY_LIGHT, text_color=theme.TEXT_MUTED,
-                border_width=1, border_color=theme.GRAY,
+                fg_color="transparent", hover_color=theme.SURFACE_ALT, text_color=theme.TEXT_SECONDARY,
+                border_width=theme.BORDER_WIDTH, border_color=theme.BORDER_STRONG,
             )
 
     def _render_state_controls(self, job):
@@ -911,21 +1052,23 @@ class MainWindow(ctk.CTk):
     def _render_detail(self, job):
         if not job:
             self.detail_content.grid_forget()
-            self.detail_empty_label.place(relx=0.5, rely=0.5, anchor="center")
+            self.detail_empty_wrap.place(relx=0.5, rely=0.5, anchor="center")
             return
-        self.detail_empty_label.place_forget()
+        self.detail_empty_wrap.place_forget()
         self.detail_content.grid(row=0, column=0, sticky="nsew")
 
         is_api = job.get("type") == "api_result"
+        badge = theme.badge_style(active=is_api)
+        badge_text = self.t("type_api") if is_api else self.t("type_search")
         self.detail_type_badge.configure(
-            text=self.t("type_api") if is_api else self.t("type_search"),
-            fg_color=theme.GREEN if is_api else theme.GRAY,
-            text_color=theme.WHITE if is_api else "#333333",
+            # Aire lateral dentro de la pill: CTkLabel no tiene padding interno.
+            text=f"  {badge_text}  ",
+            fg_color=badge["fg_color"], text_color=badge["text_color"],
         )
         match = job.get("match", 0) or 0
         idx = self._dark_mode_index()
         match_color = theme.MATCH_HIGH[idx] if match >= 70 else theme.MATCH_MID[idx] if match >= 40 else theme.MATCH_LOW[idx]
-        self.detail_match_badge.configure(text=f"{match}%", text_color=match_color, fg_color=theme.DESCRIPTION_BG)
+        self.detail_match_badge.configure(text=f"{match}%", text_color=match_color, fg_color=theme.SURFACE_SUNKEN)
         self.detail_title_label.configure(text=job.get("title") or "-")
         self.detail_subtitle_label.configure(
             text=self.t(
@@ -997,10 +1140,9 @@ class MainWindow(ctk.CTk):
             ), tags=self._row_tags(j))
         self.result_count_label.configure(text=self.t("result_count", n=len(jobs)))
         if jobs:
-            self.empty_state_label.place_forget()
+            self._hide_empty_state()
         else:
-            self.empty_state_label.configure(text=self.t("empty_results"))
-            self.empty_state_label.place(relx=0.5, rely=0.5, anchor="center")
+            self._set_empty_state(self.t("empty_results"))
         self.selected_job = None
         self._render_detail(None)
 
@@ -1060,17 +1202,21 @@ class MainWindow(ctk.CTk):
     # ---------- Status bar ----------
 
     def _build_status_bar(self):
-        status_bar = ctk.CTkFrame(self, height=theme.STATUSBAR_HEIGHT, corner_radius=0, fg_color=(theme.GRAY_LIGHT, theme.GRAY_DARK))
+        status_bar = ctk.CTkFrame(self, height=theme.STATUSBAR_HEIGHT, corner_radius=0, fg_color=theme.SURFACE)
         status_bar.grid(row=2, column=0, sticky="ew")
         status_bar.grid_propagate(False)
-        self.status_label = ctk.CTkLabel(status_bar, text=self.t("status_ready"), font=theme.FONT_SMALL, text_color=theme.TEXT_MUTED)
-        self.status_label.pack(side="left", padx=12)
+        # Separador superior sutil, en línea con el del header (sin sombra real disponible).
+        ctk.CTkFrame(status_bar, height=1, corner_radius=0, fg_color=theme.BORDER).place(relx=0, rely=0, relwidth=1, anchor="nw")
+        self.status_label = ctk.CTkLabel(
+            status_bar, text=self.t("status_ready"), font=theme.FONT_SMALL, text_color=theme.TEXT_SECONDARY,
+        )
+        self.status_label.pack(side="left", padx=theme.SPACE_MD)
 
         self.credit_label = ctk.CTkLabel(
             status_bar, text=f"{APP_NAME} v{APP_VERSION} · {self.t('credit')} {APP_AUTHOR}",
-            font=theme.FONT_SMALL, text_color=theme.TEXT_MUTED,
+            font=theme.FONT_SMALL, text_color=theme.TEXT_SECONDARY,
         )
-        self.credit_label.pack(side="right", padx=12)
+        self.credit_label.pack(side="right", padx=theme.SPACE_MD)
 
     # ---------- Search ----------
 
@@ -1188,8 +1334,7 @@ class MainWindow(ctk.CTk):
         self.selected_job = None
         self._render_detail(None)
         self.tree.delete(*self.tree.get_children())
-        self.empty_state_label.configure(text=self.t("searching"))
-        self.empty_state_label.place(relx=0.5, rely=0.5, anchor="center")
+        self._set_empty_state(self.t("searching"))
         self.result_count_label.configure(text=self.t("result_count", n=0))
         self.search_queue = queue.Queue()
         self._set_search_state(True, self.t("searching"))
