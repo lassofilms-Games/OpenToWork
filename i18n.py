@@ -41,6 +41,7 @@ STRINGS = {
         "col_type": "Tipo",
         "type_api": "Oferta real",
         "type_search": "Enlace de búsqueda",
+        "badge_new": "Nueva",
 
         # Empty states
         "empty_results": "Todavía no hay resultados.\nElige tus filtros y pulsa Buscar ofertas.",
@@ -65,6 +66,8 @@ STRINGS = {
         "status_generating_links": "Generando enlaces de búsqueda...",
         "status_querying_remoteok": "Consultando RemoteOK...",
         "status_querying_remotive": "Consultando Remotive...",
+        "status_querying_arbeitnow": "Consultando Arbeitnow...",
+        "status_querying_jobicy": "Consultando Jobicy...",
         "status_search_error": "Error en la búsqueda",
         "status_search_done": "Búsqueda completada: {n} resultados",
         "credit": "Creado por",
@@ -176,6 +179,7 @@ STRINGS = {
         "col_type": "Type",
         "type_api": "Real offer",
         "type_search": "Search link",
+        "badge_new": "New",
 
         # Empty states
         "empty_results": "No results yet.\nChoose your filters and click Search jobs.",
@@ -200,6 +204,8 @@ STRINGS = {
         "status_generating_links": "Generating search links...",
         "status_querying_remoteok": "Querying RemoteOK...",
         "status_querying_remotive": "Querying Remotive...",
+        "status_querying_arbeitnow": "Querying Arbeitnow...",
+        "status_querying_jobicy": "Querying Jobicy...",
         "status_search_error": "Search error",
         "status_search_done": "Search completed: {n} results",
         "credit": "Created by",

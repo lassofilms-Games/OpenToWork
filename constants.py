@@ -35,4 +35,6 @@ DEFAULT_SOURCES = {
     "ArtStation Jobs": False,
     "RemoteOK API": True,
     "Remotive API": True,
+    "Arbeitnow API": True,
+    "Jobicy API": True,
 }

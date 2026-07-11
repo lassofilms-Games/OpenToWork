@@ -4,6 +4,7 @@ import re
 import threading
 import webbrowser
 import tkinter as tk
+from datetime import datetime
 from tkinter import messagebox, ttk
 
 import customtkinter as ctk
@@ -11,10 +12,13 @@ from PIL import Image
 
 from constants import APP_NAME, APP_VERSION, APP_AUTHOR, DEFAULT_ROLES, DEFAULT_LOCATIONS, DEFAULT_SOURCES
 from core.scoring import DEFAULT_PROFILE_KEYWORDS, normalize_text
-from core.sources import SourceFetchError, SOURCE_DOMAINS, make_search_links, fetch_remoteok, fetch_remotive, dedupe_jobs
+from core.sources import (
+    SourceFetchError, SOURCE_DOMAINS, make_search_links, dedupe_jobs,
+    fetch_remoteok, fetch_remotive, fetch_arbeitnow, fetch_jobicy,
+)
 from core.export import now_stamp, export_txt, export_csv, export_html
 from core.config_store import RESULTS_DIR, CONFIG_FILE, LEGACY_CONFIG_FILE, find_legacy_appdata_config
-from core.job_states import job_key, load_states, save_states
+from core.job_states import job_key, load_states, save_states, load_seen, save_seen
 from core.logging_setup import setup_logging
 from i18n import t
 from ui import icons, theme
@@ -58,6 +62,7 @@ class MainWindow(ctk.CTk):
         self.save_button = None
         self.delete_unchecked_buttons = []
         self.job_states = load_states()
+        self.seen_jobs = load_seen()
 
         self._build_layout()
         self.load_config()
@@ -924,6 +929,12 @@ class MainWindow(ctk.CTk):
             header_row, text="", font=theme.FONT_BADGE, corner_radius=theme.RADIUS_SM, width=54, height=26,
         )
         self.detail_match_badge.pack(side="left", padx=(theme.SPACE_SM, 0))
+        # Badge "Nueva": solo se muestra (pack) cuando la oferta no se había
+        # visto en búsquedas anteriores.
+        self.detail_new_badge = ctk.CTkLabel(
+            header_row, text="", font=theme.FONT_BADGE, corner_radius=theme.RADIUS_SM, height=26,
+            fg_color=theme.GREEN, text_color=theme.WHITE,
+        )
         self.detail_title_label = ctk.CTkLabel(
             header_row, text="", font=theme.FONT_TITLE, text_color=theme.TEXT_PRIMARY, anchor="w",
         )
@@ -1017,6 +1028,8 @@ class MainWindow(ctk.CTk):
         # y mantienen la tabla visualmente serena.
         state = self._get_state(job)
         glyphs = ""
+        if job.get("is_new"):
+            glyphs += "✦"
         if state.get("favorite"):
             glyphs += "★"
         if state.get("applied"):
@@ -1100,6 +1113,11 @@ class MainWindow(ctk.CTk):
             match_color = theme.TEXT_SECONDARY[idx]
             match_text = "—"
         self.detail_match_badge.configure(text=match_text, text_color=match_color, fg_color=theme.SURFACE_SUNKEN)
+        if job.get("is_new"):
+            self.detail_new_badge.configure(text=f"  ✦ {self.t('badge_new')}  ")
+            self.detail_new_badge.pack(side="left", padx=(theme.SPACE_SM, 0), after=self.detail_match_badge)
+        else:
+            self.detail_new_badge.pack_forget()
         self.detail_title_label.configure(text=job.get("title") or "-")
         self.detail_subtitle_label.configure(
             text=self.t(
@@ -1288,8 +1306,10 @@ class MainWindow(ctk.CTk):
                 kind = item.get("kind")
                 if kind == "status":
                     self.status_label.configure(text=item.get("message", ""))
+                elif kind == "partial":
+                    self._absorb_partial(item.get("jobs", []))
                 elif kind == "done":
-                    self._finish_search(item.get("jobs", []), item.get("errors", []))
+                    self._finish_search(item.get("errors", []))
                 elif kind == "fatal":
                     self._fail_search(item.get("message", self.t("unexpected_error")))
         except queue.Empty:
@@ -1326,9 +1346,27 @@ class MainWindow(ctk.CTk):
             lines.append(f"- {source}: {label}.")
         return "\n".join(lines)
 
-    def _finish_search(self, jobs, errors):
-        self.jobs = dedupe_jobs(jobs)
+    def _absorb_partial(self, jobs):
+        # Búsqueda incremental: cada fuente entrega sus resultados en cuanto
+        # termina y la tabla se repuebla en caliente, sin esperar al resto.
+        if not jobs:
+            return
+        for job in jobs:
+            # Nueva = oferta real cuya URL no habíamos visto en búsquedas
+            # anteriores (el histórico se poda a 90 días).
+            key = job_key(job)
+            if job.get("type") == "api_result" and key and key not in self.seen_jobs:
+                job["is_new"] = True
+        self.jobs = dedupe_jobs(self.jobs + jobs)
         self.populate_tree(self._visible_jobs())
+
+    def _finish_search(self, errors):
+        today = datetime.now().strftime("%Y-%m-%d")
+        for job in self.jobs:
+            key = job_key(job)
+            if job.get("type") == "api_result" and key and key not in self.seen_jobs:
+                self.seen_jobs[key] = today
+        save_seen(self.seen_jobs)
         self.save_config(silent=True)
         self._set_search_state(False, self.t("status_search_done", n=len(self.jobs)))
         if not self.jobs and errors:
@@ -1339,29 +1377,32 @@ class MainWindow(ctk.CTk):
             messagebox.showwarning(APP_NAME, self._build_error_message(errors, no_results=False))
 
     def _search_jobs_worker(self, roles, locs, sources, profile_keywords, source_domains, lang):
-        jobs = []
+        # Fuentes API y su fetcher: se recorren en orden y los resultados de
+        # cada una se publican en cuanto responde.
+        api_fetchers = (
+            ("RemoteOK API", "status_querying_remoteok", fetch_remoteok),
+            ("Remotive API", "status_querying_remotive", fetch_remotive),
+            ("Arbeitnow API", "status_querying_arbeitnow", fetch_arbeitnow),
+            ("Jobicy API", "status_querying_jobicy", fetch_jobicy),
+        )
         errors = []
         try:
             self._queue_status(t(lang, "status_generating_links"))
-            jobs += make_search_links(roles, locs, sources, profile_keywords, source_domains, lang=lang)
+            links = make_search_links(roles, locs, sources, profile_keywords, source_domains, lang=lang)
+            self.search_queue.put({"kind": "partial", "jobs": links})
 
-            if "RemoteOK API" in sources:
-                self._queue_status(t(lang, "status_querying_remoteok"))
+            for source_name, status_key, fetcher in api_fetchers:
+                if source_name not in sources:
+                    continue
+                self._queue_status(t(lang, status_key))
                 try:
-                    jobs += fetch_remoteok(roles, profile_keywords, lang=lang)
+                    jobs = fetcher(roles, profile_keywords, lang=lang)
+                    self.search_queue.put({"kind": "partial", "jobs": jobs})
                 except SourceFetchError as error:
                     logger.warning("%s", error.message)
                     errors.append({"source": error.source, "kind": error.kind, "message": error.message})
 
-            if "Remotive API" in sources:
-                self._queue_status(t(lang, "status_querying_remotive"))
-                try:
-                    jobs += fetch_remotive(roles, profile_keywords, lang=lang)
-                except SourceFetchError as error:
-                    logger.warning("%s", error.message)
-                    errors.append({"source": error.source, "kind": error.kind, "message": error.message})
-
-            self.search_queue.put({"kind": "done", "jobs": jobs, "errors": errors})
+            self.search_queue.put({"kind": "done", "errors": errors})
         except Exception as error:
             logger.exception("Unexpected error during job search")
             self.search_queue.put({"kind": "fatal", "message": t(lang, "unexpected_search_error", error=error)})
@@ -1517,6 +1558,11 @@ class MainWindow(ctk.CTk):
                     name = normalize_text(item.get("name", ""))
                     if name:
                         self.create_source_row(name, enabled=bool(item.get("enabled", True)))
+                # Fuentes añadidas en versiones nuevas de la app: se incorporan
+                # a las configuraciones guardadas antes de que existieran.
+                for src, enabled in DEFAULT_SOURCES.items():
+                    if src not in self.source_vars:
+                        self.create_source_row(src, enabled=enabled)
             else:
                 for k, val in cfg.get("sources", {}).items():
                     if k in self.source_vars:

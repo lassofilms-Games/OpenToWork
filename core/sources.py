@@ -40,6 +40,9 @@ SOURCE_DOMAINS = {
     "ArtStation Jobs": "artstation.com/jobs",
 }
 
+# Fuentes que devuelven ofertas reales vía API (no generan enlaces de búsqueda).
+API_SOURCES = ("RemoteOK API", "Remotive API", "Arbeitnow API", "Jobicy API")
+
 
 class SourceFetchError(Exception):
     def __init__(self, source, kind, message):
@@ -107,7 +110,7 @@ def make_search_links(roles, locations, sources, profile_keywords=None, source_d
     for role in roles:
         for loc in locations:
             for src in sources:
-                if src in ["RemoteOK API", "Remotive API"]:
+                if src in API_SOURCES:
                     continue
                 domain = domains.get(src, "")
                 direct = build_source_url(src, role, loc, domains)
@@ -233,6 +236,114 @@ def fetch_remotive(roles, profile_keywords=None, limit=40, lang="es"):
                 "type": "api_result"
             })
     # dedupe
+    seen = set()
+    out = []
+    for j in results:
+        key = (j["title"].lower(), j["company"].lower(), j["source"])
+        if key not in seen:
+            seen.add(key); out.append(j)
+    return out[:limit]
+
+
+def fetch_arbeitnow(roles, profile_keywords=None, limit=40, lang="es"):
+    # Job board europeo (base en Alemania), API pública sin key. Devuelve el
+    # feed completo paginado; con la primera página basta y se filtra por rol.
+    results = []
+    data = _cache_get("arbeitnow")
+    if data is None:
+        url = "https://www.arbeitnow.com/api/job-board-api"
+        response = _handle_requests_call("Arbeitnow API", url)
+        try:
+            data = response.json().get("data", [])
+        except ValueError as error:
+            raise SourceFetchError("Arbeitnow API", "invalid_response", "Arbeitnow API: la respuesta JSON no es valida.") from error
+        _cache_set("arbeitnow", data)
+    role_terms = [x.lower() for x in roles]
+    not_available = t(lang, "not_available")
+    for item in data:
+        title = normalize_text(item.get("title"))
+        company = normalize_text(item.get("company_name"))
+        desc = normalize_text(re.sub(r"<[^>]+>", " ", item.get("description") or ""))
+        tags = " ".join((item.get("tags") or []) + (item.get("job_types") or []))
+        text = f"{title} {company} {desc} {tags}".lower()
+        if not _matches_role_terms(text, role_terms):
+            continue
+        is_remote = bool(item.get("remote"))
+        loc = normalize_text(item.get("location")) or ("Remote" if is_remote else "-")
+        apply = item.get("url") or ""
+        raw_published = item.get("created_at")
+        try:
+            published = datetime.fromtimestamp(raw_published).strftime("%Y-%m-%d")
+        except (TypeError, ValueError, OSError, OverflowError):
+            published = not_available
+        score, found = score_job(title, desc + " " + tags, company, loc, profile_keywords, roles)
+        score = max(0, min(100, score + freshness_bonus(raw_published)))
+        results.append({
+            "match": score,
+            "title": title,
+            "company": company,
+            "location": loc,
+            "remote": "Remote" if is_remote else "Hybrid/On-site possible",
+            "source": "Arbeitnow API",
+            "published_date": published,
+            "detected_date": datetime.now().strftime("%Y-%m-%d"),
+            "apply_url": apply,
+            "fallback_url": apply,
+            "description": desc[:3000],
+            "skills_found": ", ".join(found),
+            "type": "api_result"
+        })
+    return results[:limit]
+
+
+def fetch_jobicy(roles, profile_keywords=None, limit=40, lang="es"):
+    # Portal de empleo remoto con API pública sin key; admite un keyword por
+    # consulta, así que se lanza una por rol (como Remotive).
+    results = []
+    role_terms = [x.lower() for x in roles]
+    not_available = t(lang, "not_available")
+    for role in roles[:8]:
+        data = _cache_get(("jobicy", role.lower()))
+        if data is None:
+            q = urllib.parse.quote_plus(role)
+            url = f"https://jobicy.com/api/v2/remote-jobs?count=50&tag={q}"
+            headers = {"User-Agent": f"{APP_NAME}/{APP_VERSION}"}
+            response = _handle_requests_call("Jobicy API", url, headers=headers)
+            try:
+                payload = response.json()
+            except ValueError as error:
+                raise SourceFetchError("Jobicy API", "invalid_response", "Jobicy API: la respuesta JSON no es valida.") from error
+            data = payload.get("jobs") if isinstance(payload, dict) else None
+            if not isinstance(data, list):
+                data = []
+            _cache_set(("jobicy", role.lower()), data)
+        for item in data:
+            title = normalize_text(item.get("jobTitle"))
+            company = normalize_text(item.get("companyName"))
+            desc = normalize_text(re.sub(r"<[^>]+>", " ", item.get("jobDescription") or item.get("jobExcerpt") or ""))
+            text = f"{title} {company} {desc}".lower()
+            if not _matches_role_terms(text, role_terms):
+                continue
+            loc = normalize_text(item.get("jobGeo")) or "Remote"
+            apply = item.get("url") or ""
+            raw_published = item.get("pubDate")
+            score, found = score_job(title, desc, company, loc, profile_keywords, roles)
+            score = max(0, min(100, score + freshness_bonus(raw_published)))
+            results.append({
+                "match": score,
+                "title": title,
+                "company": company,
+                "location": loc,
+                "remote": "Remote",
+                "source": "Jobicy API",
+                "published_date": str(raw_published)[:10] if raw_published else not_available,
+                "detected_date": datetime.now().strftime("%Y-%m-%d"),
+                "apply_url": apply,
+                "fallback_url": apply,
+                "description": desc[:3000],
+                "skills_found": ", ".join(found),
+                "type": "api_result"
+            })
     seen = set()
     out = []
     for j in results:

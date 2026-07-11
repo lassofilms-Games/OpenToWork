@@ -49,7 +49,7 @@ def _migrate_legacy_data(data_dir):
     # para que el usuario no pierda nada. Solo si el destino aún no existe.
     for legacy_name in LEGACY_APP_FOLDER_NAMES:
         for candidate in _candidate_dirs(legacy_name):
-            for filename in ("config.json", "job_states.json"):
+            for filename in ("config.json", "job_states.json", "seen_jobs.json"):
                 src = candidate / filename
                 dst = data_dir / filename
                 if src.exists() and not dst.exists():
