@@ -350,7 +350,17 @@ def fetch_jobicy(roles, profile_keywords=None, limit=40, lang="es"):
             q = urllib.parse.quote_plus(role)
             url = f"https://jobicy.com/api/v2/remote-jobs?count=50&tag={q}"
             headers = {"User-Agent": f"{APP_NAME}/{APP_VERSION}"}
-            response = _handle_requests_call("Jobicy API", url, headers=headers)
+            try:
+                response = _handle_requests_call("Jobicy API", url, headers=headers)
+            except SourceFetchError as error:
+                # Jobicy responde 404 cuando un tag no tiene ofertas; eso no es
+                # un fallo de la fuente, es simplemente "sin resultados".
+                cause = error.__cause__
+                status = getattr(getattr(cause, "response", None), "status_code", None)
+                if status == 404:
+                    _cache_set(("jobicy", role.lower()), [])
+                    continue
+                raise
             try:
                 payload = response.json()
             except ValueError as error:
