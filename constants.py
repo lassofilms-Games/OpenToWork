@@ -80,6 +80,10 @@ DEFAULT_SOURCE_GROUPS = [
         "Remotive API": True,
         "Arbeitnow API": True,
         "Jobicy API": True,
+        "Himalayas API": True,
+        "The Muse API": True,
+        "WeWorkRemotely API": True,
+        "Working Nomads API": True,
     }),
 ]
 

@@ -14,7 +14,8 @@ Aplicación de escritorio en Python (CustomTkinter) para buscar ofertas de emple
 - **Exportación** a TXT, CSV y HTML.
 - **Modo claro/oscuro** y **selector de idioma español/inglés**, ambos en caliente.
 - **Paneles redimensionables**: arrastra los divisores entre buscador, tabla y detalle.
-- Integraciones ya incluidas: LinkedIn, Wellfound, Work With Indies, Hitmarker, Creativepool, InfoJobs, Glassdoor, ArtStation, RemoteOK API y Remotive API.
+- **39 fuentes en 6 categorías plegables** (empleo público, generalistas, especializadas, internacionales y remoto), de LinkedIn e InfoJobs a EURES, Indeed o Tecnoempleo.
+- **8 APIs con ofertas reales dentro de la app** (sin API key): RemoteOK, Remotive, Arbeitnow, Jobicy, Himalayas, The Muse, WeWorkRemotely y Working Nomads — con búsqueda incremental, caché de 15 minutos y marcado ✦ de ofertas nuevas.
 
 ## Instalación
 

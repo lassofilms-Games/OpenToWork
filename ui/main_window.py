@@ -18,6 +18,7 @@ from core.scoring import DEFAULT_PROFILE_KEYWORDS, normalize_text
 from core.sources import (
     SourceFetchError, SOURCE_DOMAINS, make_search_links, dedupe_jobs,
     fetch_remoteok, fetch_remotive, fetch_arbeitnow, fetch_jobicy,
+    fetch_himalayas, fetch_themuse, fetch_weworkremotely, fetch_workingnomads,
 )
 from core.export import now_stamp, export_txt, export_csv, export_html
 from core.config_store import RESULTS_DIR, CONFIG_FILE, LEGACY_CONFIG_FILE, find_legacy_appdata_config
@@ -1453,6 +1454,10 @@ class MainWindow(ctk.CTk):
             ("Remotive API", "status_querying_remotive", fetch_remotive),
             ("Arbeitnow API", "status_querying_arbeitnow", fetch_arbeitnow),
             ("Jobicy API", "status_querying_jobicy", fetch_jobicy),
+            ("Himalayas API", "status_querying_himalayas", fetch_himalayas),
+            ("The Muse API", "status_querying_themuse", fetch_themuse),
+            ("WeWorkRemotely API", "status_querying_weworkremotely", fetch_weworkremotely),
+            ("Working Nomads API", "status_querying_workingnomads", fetch_workingnomads),
         )
         errors = []
         try:
