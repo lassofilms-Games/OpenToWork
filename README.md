@@ -14,8 +14,25 @@ Aplicación de escritorio en Python (CustomTkinter) para buscar ofertas de emple
 - **Exportación** a TXT, CSV y HTML.
 - **Modo claro/oscuro** y **selector de idioma español/inglés**, ambos en caliente.
 - **Paneles redimensionables**: arrastra los divisores entre buscador, tabla y detalle.
-- **39 fuentes en 6 categorías plegables** (empleo público, generalistas, especializadas, internacionales y remoto), de LinkedIn e InfoJobs a EURES, Indeed o Tecnoempleo.
-- **8 APIs con ofertas reales dentro de la app** (sin API key): RemoteOK, Remotive, Arbeitnow, Jobicy, Himalayas, The Muse, WeWorkRemotely y Working Nomads — con búsqueda incremental, caché de 15 minutos y marcado ✦ de ofertas nuevas.
+- **43 fuentes incluidas por defecto** organizadas en 6 categorías plegables: 35 portales por dominio y 8 APIs con ofertas reales dentro de la app — con búsqueda incremental, caché de 15 minutos y marcado ✦ de ofertas nuevas.
+
+## Fuentes incluidas (43 por defecto)
+
+**8 APIs sin key** — devuelven ofertas reales directamente en la tabla:
+
+RemoteOK · Remotive · Arbeitnow · Jobicy · Himalayas · The Muse · WeWorkRemotely · Working Nomads
+
+**35 portales por dominio** — generan enlaces de búsqueda directos (con fallback de Google) en 5 categorías:
+
+| Categoría | Portales |
+|-----------|----------|
+| Empleo público (6) | Empléate, Infoempleo, EURES, Feina Activa, SAE Empleo, Lanbide |
+| Generalistas (7) | InfoJobs, LinkedIn Jobs, Google Empleos, JobToday, Job&Talent, Adzuna, Jooble España |
+| Especializados (10) | TuriJobs, Tecnoempleo, Domestika Jobs, Jobgether, Malt, JobFluent, Work With Indies, Hitmarker, Creativepool Jobs, ArtStation Jobs |
+| Internacional (6) | Indeed, AnyWorkAnywhere, Glassdoor, Workaway, Relocate.me, Go Overseas |
+| Trabajo remoto (6) | FlexJobs, Jobspresso, Remote.co, Wellfound, Working Nomads, PeoplePerHour |
+
+14 fuentes vienen activadas de serie; el resto se activan con un clic desde su categoría. Además puedes añadir cualquier otro portal por nombre + dominio desde "Fuentes personalizadas".
 
 ## Instalación
 
