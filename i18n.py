@@ -13,6 +13,15 @@ STRINGS = {
         "section_custom_sources_hint": "Añade otros portales de empleo por dominio",
         "section_keywords": "Keywords / Match",
 
+        # Source groups
+        "source_group_public": "Empleo público",
+        "source_group_general": "Generalistas",
+        "source_group_specialized": "Especializados",
+        "source_group_international": "Internacional",
+        "source_group_remote": "Trabajo remoto",
+        "source_group_apis": "APIs (ofertas reales)",
+        "source_group_other": "Otras",
+
         # Buttons
         "search_button": "Buscar ofertas",
         "delete_unchecked": "Eliminar desmarcadas",
@@ -150,6 +159,15 @@ STRINGS = {
         "section_custom_sources": "Custom sources",
         "section_custom_sources_hint": "Add other job portals by domain",
         "section_keywords": "Keywords / Match",
+
+        # Source groups
+        "source_group_public": "Public employment",
+        "source_group_general": "General boards",
+        "source_group_specialized": "Specialized",
+        "source_group_international": "International",
+        "source_group_remote": "Remote work",
+        "source_group_apis": "APIs (real offers)",
+        "source_group_other": "Other",
 
         # Buttons
         "search_button": "Search jobs",

@@ -10,7 +10,10 @@ from tkinter import messagebox, ttk
 import customtkinter as ctk
 from PIL import Image
 
-from constants import APP_NAME, APP_VERSION, APP_AUTHOR, DEFAULT_ROLES, DEFAULT_LOCATIONS, DEFAULT_SOURCES
+from constants import (
+    APP_NAME, APP_VERSION, APP_AUTHOR, DEFAULT_ROLES, DEFAULT_LOCATIONS,
+    DEFAULT_SOURCES, DEFAULT_SOURCE_GROUPS, SOURCE_GROUP_OF, SOURCE_GROUP_OTHER,
+)
 from core.scoring import DEFAULT_PROFILE_KEYWORDS, normalize_text
 from core.sources import (
     SourceFetchError, SOURCE_DOMAINS, make_search_links, dedupe_jobs,
@@ -264,6 +267,8 @@ class MainWindow(ctk.CTk):
         self.roles_section_label.configure(text=self.t("section_roles"))
         self.location_section_label.configure(text=self.t("section_location"))
         self.sources_section_label.configure(text=self.t("section_sources"))
+        for group_key, ui in self.source_group_uis.items():
+            ui["label"].configure(text=self.t(group_key))
         self.custom_sources_section_label.configure(text=self.t("section_custom_sources"))
         self.custom_sources_hint_label.configure(text=self.t("section_custom_sources_hint"))
         self.keywords_section_label.configure(text=self.t("section_keywords"))
@@ -448,13 +453,72 @@ class MainWindow(ctk.CTk):
         self._small_action_button(card, self.t("delete_unchecked"), self.delete_unchecked_locations)
 
     def _build_sources_section(self, parent):
+        # Con 30+ fuentes, una lista plana sería un muro de checkboxes: cada
+        # categoría se muestra como un grupo plegable con contador activas/total,
+        # plegado por defecto para que el sidebar siga siendo compacto.
         card = self._section_card(parent)
         self.sources_section_label = self._section_label(card, self.t("section_sources"))
         self.sources_frame = ctk.CTkFrame(card, fg_color="transparent", height=0)
         self.sources_frame.pack(fill="x", padx=theme.SPACE_MD)
+
+        self.source_group_uis = {}
+        self._source_group_order = [key for key, _ in DEFAULT_SOURCE_GROUPS] + [SOURCE_GROUP_OTHER]
+        for group_key in self._source_group_order:
+            self._build_source_group(group_key)
         for src, enabled in DEFAULT_SOURCES.items():
             self.create_source_row(src, enabled=enabled)
+        self._update_source_group_counts()
         self._small_action_button(card, self.t("delete_unchecked"), self.delete_unchecked_sources)
+
+    def _build_source_group(self, group_key):
+        # Sin pack inicial: _update_source_group_counts empaqueta los grupos
+        # con fuentes siguiendo siempre el orden canónico de las categorías.
+        container = ctk.CTkFrame(self.sources_frame, fg_color="transparent")
+
+        header = ctk.CTkFrame(container, fg_color="transparent", cursor="hand2")
+        header.pack(fill="x", pady=1)
+        chevron = ctk.CTkLabel(header, text="▸", width=16, font=theme.FONT_SMALL, text_color=theme.TEXT_SECONDARY, anchor="w")
+        chevron.pack(side="left")
+        label = ctk.CTkLabel(header, text=self.t(group_key), font=theme.FONT_BODY, text_color=theme.TEXT_PRIMARY, anchor="w")
+        label.pack(side="left", fill="x", expand=True)
+        count = ctk.CTkLabel(header, text="", font=theme.FONT_SMALL, text_color=theme.TEXT_SECONDARY, anchor="e")
+        count.pack(side="right")
+        for widget in (header, chevron, label, count):
+            widget.bind("<Button-1>", lambda e, k=group_key: self._toggle_source_group(k))
+
+        # El cuerpo se crea sin pack: el grupo nace plegado.
+        body = ctk.CTkFrame(container, fg_color="transparent")
+        self.source_group_uis[group_key] = {
+            "container": container, "header": header, "chevron": chevron,
+            "label": label, "count": count, "body": body,
+        }
+
+    def _toggle_source_group(self, group_key):
+        ui = self.source_group_uis[group_key]
+        if ui["body"].winfo_manager():
+            ui["body"].pack_forget()
+            ui["chevron"].configure(text="▸")
+        else:
+            ui["body"].pack(fill="x", padx=(theme.SPACE_MD, 0))
+            ui["chevron"].configure(text="▾")
+
+    def _source_group_for(self, source):
+        return SOURCE_GROUP_OF.get(source, SOURCE_GROUP_OTHER)
+
+    def _update_source_group_counts(self):
+        if not hasattr(self, "source_group_uis"):
+            return
+        # Re-empaquetado completo en orden canónico: si solo se re-empaquetara
+        # el grupo que cambia, quedaría al final y las categorías se
+        # desordenarían. Los grupos vacíos (p. ej. "Otras") no ocupan sitio.
+        for group_key in self._source_group_order:
+            ui = self.source_group_uis[group_key]
+            names = [s for s in self.source_vars if self._source_group_for(s) == group_key]
+            active = sum(1 for s in names if self.source_vars[s].get())
+            ui["count"].configure(text=f"{active}/{len(names)}")
+            ui["container"].pack_forget()
+            if names:
+                ui["container"].pack(fill="x")
 
     def _build_custom_sources_section(self, parent):
         card = self._section_card(parent)
@@ -660,17 +724,22 @@ class MainWindow(ctk.CTk):
         v = tk.BooleanVar(value=enabled)
         self.source_vars[source] = v
 
-        row = ctk.CTkFrame(self.sources_frame, fg_color="transparent")
+        body = self.source_group_uis[self._source_group_for(source)]["body"]
+        row = ctk.CTkFrame(body, fg_color="transparent")
         row.pack(fill="x", anchor="w", pady=2)
-        self._row_checkbox(row, source, v).pack(side="left", fill="x", expand=True, anchor="w")
+        checkbox = self._row_checkbox(row, source, v)
+        checkbox.configure(command=self._update_source_group_counts)
+        checkbox.pack(side="left", fill="x", expand=True, anchor="w")
         self._row_delete_button(row, lambda s=source: self.delete_source(s)).pack(side="right")
         self.source_widgets[source] = row
+        self._update_source_group_counts()
 
     def delete_source(self, source, save=True):
         widget = self.source_widgets.pop(source, None)
         if widget is not None:
             widget.destroy()
         self.source_vars.pop(source, None)
+        self._update_source_group_counts()
         if save:
             self.save_config(silent=True)
 

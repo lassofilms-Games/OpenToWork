@@ -30,14 +30,46 @@ except ImportError:
     requests = None
 
 SOURCE_DOMAINS = {
+    # Empleo público
+    "Empléate": "empleate.gob.es",
+    "Infoempleo": "infoempleo.com",
+    "EURES": "eures.europa.eu",
+    "Feina Activa": "feinaactiva.gencat.cat",
+    "SAE Empleo": "saempleo.es",
+    "Lanbide": "lanbide.euskadi.eus",
+    # Generalistas
+    "InfoJobs": "infojobs.net",
     "LinkedIn Jobs": "linkedin.com/jobs",
-    "Wellfound": "wellfound.com/jobs",
+    "Google Empleos": "google.com",
+    "JobToday": "jobtoday.com",
+    "Job&Talent": "jobandtalent.es",
+    "Adzuna": "adzuna.es",
+    "Jooble España": "es.jooble.org",
+    # Especializados
+    "TuriJobs": "turijobs.com",
+    "Tecnoempleo": "tecnoempleo.com",
+    "Domestika Jobs": "domestika.org/es/jobs",
+    "Jobgether": "jobgether.com",
+    "Malt": "malt.es",
+    "JobFluent": "jobfluent.com",
     "Work With Indies": "workwithindies.com",
     "Hitmarker": "hitmarker.net/jobs",
     "Creativepool Jobs": "creativepool.com/jobs",
-    "InfoJobs": "infojobs.net",
-    "Glassdoor Jobs": "glassdoor.es/Job",
     "ArtStation Jobs": "artstation.com/jobs",
+    # Internacional
+    "Indeed": "indeed.com",
+    "AnyWorkAnywhere": "anyworkanywhere.com",
+    "Glassdoor Jobs": "glassdoor.es/Job",
+    "Workaway": "workaway.info",
+    "Relocate.me": "relocate.me",
+    "Go Overseas": "gooverseas.com",
+    # Trabajo remoto
+    "FlexJobs": "flexjobs.com",
+    "Jobspresso": "jobspresso.co",
+    "Remote.co": "remote.co",
+    "Wellfound": "wellfound.com/jobs",
+    "Working Nomads": "workingnomads.com",
+    "PeoplePerHour": "peopleperhour.com",
 }
 
 # Fuentes que devuelven ofertas reales vía API (no generan enlaces de búsqueda).
@@ -85,6 +117,11 @@ def build_source_url(source, role, location, source_domains=None):
     domains = SOURCE_DOMAINS if source_domains is None else source_domains
     q = urllib.parse.quote_plus(role)
     loc = urllib.parse.quote_plus(location)
+    if source == "Google Empleos":
+        # Panel nativo de empleo de Google (ibp=htl;jobs).
+        return f"https://www.google.com/search?q={q}+{loc}&ibp=htl;jobs"
+    if source == "Indeed":
+        return f"https://es.indeed.com/jobs?q={q}&l={loc}"
     if source == "LinkedIn Jobs":
         return f"https://www.linkedin.com/jobs/search/?keywords={q}&location={loc}"
     if source == "Wellfound":
